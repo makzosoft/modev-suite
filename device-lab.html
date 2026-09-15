@@ -129,6 +129,17 @@
     html:not(.force-desktop) .drawer-handle{
       display:block; width:40px; height:4px; background:var(--border); border-radius:2px; margin:2px auto 8px;
     }
+    html:not(.force-desktop) .acc-head{
+      display:flex; align-items:center; justify-content:space-between; cursor:pointer; padding:2px 0;
+    }
+    html:not(.force-desktop) .acc-chevron{transition:transform .2s ease; color:var(--muted); font-size:13px;}
+    html:not(.force-desktop) [data-accordion].open .acc-chevron{transform:rotate(180deg);}
+    html:not(.force-desktop) .acc-body{
+      display:grid; grid-template-rows:0fr; overflow:hidden; transition:grid-template-rows .22s ease;
+    }
+    html:not(.force-desktop) .acc-body > *{min-height:0;}
+    html:not(.force-desktop) [data-accordion].open .acc-body{grid-template-rows:1fr;}
+    html:not(.force-desktop) .acc-body-inner{overflow:hidden; display:flex; flex-direction:column; gap:8px; padding-top:8px;}
   }
   .drawer-handle{display:none;}
 
@@ -199,88 +210,98 @@
 <div id="controlsPanel">
   <div class="drawer-handle"></div>
 
-  <div class="panel-section">
-    <div class="panel-section-label">Source</div>
-    <div class="row">
-      <button id="folderBtn" title="Select the project folder to auto-list its HTML pages">📁 Select folder</button>
-      <button id="dropHint" class="icon" title="You can also drag & drop a folder or files here (desktop)">⤵</button>
-    </div>
-    <select id="pageSelect" title="Pages found in the connected folder">
-      <option value="">— no folder connected —</option>
-    </select>
-    <div class="row">
-      <input id="pathInput" type="text" placeholder="or type a path, e.g. index.html" spellcheck="false" list="knownPaths">
-      <button id="loadBtn" class="primary">Load</button>
-    </div>
-    <datalist id="knownPaths"></datalist>
-    <input id="folderInput" type="file" webkitdirectory directory multiple style="display:none;">
-  </div>
-
-  <div class="sep"></div>
-
-  <div class="panel-section">
-    <div class="panel-section-label">Or preview from GitHub</div>
-    <div id="ghConnectRow" class="row">
-      <button id="ghConnectBtn">🔗 Connect GitHub</button>
-    </div>
-    <div id="ghBrowseRow" style="display:none;">
+  <div class="panel-section" data-accordion>
+    <div class="panel-section-label acc-head">Source <span class="acc-chevron">▾</span></div>
+    <div class="acc-body"><div class="acc-body-inner">
       <div class="row">
-        <select id="ghRepoSelect"><option value="">Repo…</option></select>
-        <select id="ghBranchSelect"><option value="">Branch…</option></select>
+        <button id="folderBtn" title="Select the project folder to auto-list its HTML pages">📁 Select folder</button>
+        <button id="dropHint" class="icon" title="You can also drag & drop a folder or files here (desktop)">⤵</button>
       </div>
-      <div id="ghBreadcrumb" style="font-size:11px;color:var(--muted);padding:4px 0;overflow-x:auto;white-space:nowrap;"></div>
-      <div id="ghFileList" style="max-height:180px;overflow-y:auto;"></div>
-    </div>
-    <div id="ghStatus" style="font-size:11.5px;color:var(--muted);"></div>
+      <select id="pageSelect" title="Pages found in the connected folder">
+        <option value="">— no folder connected —</option>
+      </select>
+      <div class="row">
+        <input id="pathInput" type="text" placeholder="or type a path, e.g. index.html" spellcheck="false" list="knownPaths">
+        <button id="loadBtn" class="primary">Load</button>
+      </div>
+      <datalist id="knownPaths"></datalist>
+      <input id="folderInput" type="file" webkitdirectory directory multiple style="display:none;">
+    </div></div>
   </div>
 
   <div class="sep"></div>
 
-  <div class="panel-section">
-    <div class="panel-section-label">Device</div>
-    <div class="row">
-      <select id="deviceSelect"></select>
-      <button id="rotateBtn" class="icon" title="Rotate / swap W and H">⟲</button>
-    </div>
-    <div class="row">
-      <label class="field-label">W</label>
-      <input id="widthInput" class="num" type="number" min="200" max="4000">
-      <label class="field-label">H</label>
-      <input id="heightInput" class="num" type="number" min="200" max="4000">
-    </div>
-    <div class="row">
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);">
-        <input id="addToGrid" type="checkbox" style="width:auto;min-height:auto;"> Add current size to grid (max 4)
-      </label>
-    </div>
+  <div class="panel-section" data-accordion>
+    <div class="panel-section-label acc-head">Or preview from GitHub <span class="acc-chevron">▾</span></div>
+    <div class="acc-body"><div class="acc-body-inner">
+      <div id="ghConnectRow" class="row">
+        <button id="ghConnectBtn">🔗 Connect GitHub</button>
+      </div>
+      <div id="ghBrowseRow" style="display:none;">
+        <div class="row">
+          <select id="ghRepoSelect"><option value="">Repo…</option></select>
+          <select id="ghBranchSelect"><option value="">Branch…</option></select>
+        </div>
+        <div id="ghBreadcrumb" style="font-size:11px;color:var(--muted);padding:4px 0;overflow-x:auto;white-space:nowrap;"></div>
+        <div id="ghFileList" style="max-height:180px;overflow-y:auto;"></div>
+      </div>
+      <div id="ghStatus" style="font-size:11.5px;color:var(--muted);"></div>
+    </div></div>
   </div>
 
   <div class="sep"></div>
 
-  <div class="panel-section">
-    <div class="panel-section-label">Zoom</div>
-    <div class="row">
-      <button id="zoomOut" class="icon" title="Zoom out">−</button>
-      <span id="zoomLabel">100%</span>
-      <button id="zoomIn" class="icon" title="Zoom in">+</button>
-      <label style="display:flex;align-items:center;gap:4px;">
-        <input id="autoFit" type="checkbox" style="width:auto;min-height:auto;"> fit
-      </label>
-    </div>
+  <div class="panel-section" data-accordion>
+    <div class="panel-section-label acc-head">Device <span class="acc-chevron">▾</span></div>
+    <div class="acc-body"><div class="acc-body-inner">
+      <div class="row">
+        <select id="deviceSelect"></select>
+        <button id="rotateBtn" class="icon" title="Rotate / swap W and H">⟲</button>
+      </div>
+      <div class="row">
+        <label class="field-label">W</label>
+        <input id="widthInput" class="num" type="number" min="200" max="4000">
+        <label class="field-label">H</label>
+        <input id="heightInput" class="num" type="number" min="200" max="4000">
+      </div>
+      <div class="row">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);">
+          <input id="addToGrid" type="checkbox" style="width:auto;min-height:auto;"> Add current size to grid (max 4)
+        </label>
+      </div>
+    </div></div>
   </div>
 
   <div class="sep"></div>
 
-  <div class="panel-section">
-    <div class="panel-section-label">Tool</div>
-    <div class="row">
-      <button id="reloadBtn" class="icon" title="Reload page">↻</button>
-      <button id="gridToggleBtn" title="Show devices side by side">⊞ Grid</button>
-      <button id="screenshotBtn" title="Export the current frame as a PNG">📷</button>
-      <button id="recordBtn" title="Record a short auto-scroll video clip (.webm)">🎥</button>
-      <button class="layoutToggleBtn" title="Toggle desktop layout">🖥️ Desktop layout</button>
-      <button id="closeDrawerBtn" title="Close">Close</button>
-    </div>
+  <div class="panel-section" data-accordion>
+    <div class="panel-section-label acc-head">Zoom <span class="acc-chevron">▾</span></div>
+    <div class="acc-body"><div class="acc-body-inner">
+      <div class="row">
+        <button id="zoomOut" class="icon" title="Zoom out">−</button>
+        <span id="zoomLabel">100%</span>
+        <button id="zoomIn" class="icon" title="Zoom in">+</button>
+        <label style="display:flex;align-items:center;gap:4px;">
+          <input id="autoFit" type="checkbox" style="width:auto;min-height:auto;"> fit
+        </label>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="sep"></div>
+
+  <div class="panel-section" data-accordion>
+    <div class="panel-section-label acc-head">Tool <span class="acc-chevron">▾</span></div>
+    <div class="acc-body"><div class="acc-body-inner">
+      <div class="row">
+        <button id="reloadBtn" class="icon" title="Reload page">↻</button>
+        <button id="gridToggleBtn" title="Show devices side by side">⊞ Grid</button>
+        <button id="screenshotBtn" title="Export the current frame as a PNG">📷</button>
+        <button id="recordBtn" title="Record a short auto-scroll video clip (.webm)">🎥</button>
+        <button class="layoutToggleBtn" title="Toggle desktop layout">🖥️ Desktop layout</button>
+        <button id="closeDrawerBtn" title="Close">Close</button>
+      </div>
+    </div></div>
   </div>
 
   <div id="status"></div>
@@ -1045,6 +1066,19 @@
 
   // ---------------- drawer open/close (mobile) ----------------
   function openDrawer(){ els.controlsPanel.classList.add("open"); els.drawerBackdrop.classList.add("open"); }
+
+  // Accordion: tapping a section header toggles it; only one open at a time
+  // keeps the mobile drawer from turning into one long scattered scroll.
+  var accSections = Array.prototype.slice.call(document.querySelectorAll("[data-accordion]"));
+  accSections.forEach(function(sec, i){
+    var head = sec.querySelector(".acc-head");
+    head.addEventListener("click", function(){
+      var wasOpen = sec.classList.contains("open");
+      accSections.forEach(function(s){ s.classList.remove("open"); });
+      if (!wasOpen) sec.classList.add("open");
+    });
+    if (i === 0) sec.classList.add("open"); // Source open by default
+  });
   function closeDrawer(){ els.controlsPanel.classList.remove("open"); els.drawerBackdrop.classList.remove("open"); }
   els.menuBtn.addEventListener("click", openDrawer);
   els.closeDrawerBtn.addEventListener("click", closeDrawer);
@@ -1072,24 +1106,34 @@
   });
   els.loadBtn.addEventListener("click", function(){ loadPath(els.pathInput.value.trim()); closeDrawer(); });
   els.pathInput.addEventListener("keydown", function(e){ if (e.key==="Enter"){ loadPath(els.pathInput.value.trim()); closeDrawer(); } });
-  function doReload(){ if (els.iframe.src) els.iframe.src = els.iframe.src; }
+  function doReload(){
+    if (els.iframe.srcdoc){ var html2 = els.iframe.srcdoc; els.iframe.srcdoc = ""; els.iframe.srcdoc = html2; }
+    else if (els.iframe.src) els.iframe.src = els.iframe.src;
+  }
   els.reloadBtn.addEventListener("click", doReload);
   els.reloadBtnMobile.addEventListener("click", doReload);
+  // Many sites measure window width once at load (hero sections, carousels) and
+  // never re-measure on resize — so just resizing the iframe box leaves stale
+  // values from whatever size loaded first. A real reload re-runs that JS at
+  // the correct final size. Only do this on deliberate size CHANGES (preset
+  // pick, rotate), not on every keystroke while typing a custom width.
+  function reloadIfLoaded(){ if (els.iframe.src || els.iframe.srcdoc) doReload(); }
 
   els.deviceSelect.addEventListener("change", function(){
     var opt = els.deviceSelect.options[els.deviceSelect.selectedIndex];
-    if (opt.value === "custom"){ applyDeviceChrome(null); applySize(); saveState({deviceValue:"custom"}); syncAddToGridCheckbox(); return; }
+    if (opt.value === "custom"){ applyDeviceChrome(null); applySize(); saveState({deviceValue:"custom"}); syncAddToGridCheckbox(); reloadIfLoaded(); return; }
     var d = opt._device;
     els.widthInput.value=d.w; els.heightInput.value=d.h;
-    applyDeviceChrome(d); applySize(); saveState({deviceValue:opt.value}); syncAddToGridCheckbox();
+    applyDeviceChrome(d); applySize(); saveState({deviceValue:opt.value}); syncAddToGridCheckbox(); reloadIfLoaded();
   });
   [els.widthInput, els.heightInput].forEach(function(input){
     input.addEventListener("input", function(){
       els.deviceSelect.value="custom"; applyDeviceChrome(null); applySize(); saveState({deviceValue:"custom"}); syncAddToGridCheckbox();
     });
+    input.addEventListener("change", reloadIfLoaded); // fires once when the user finishes editing (blur/enter), not per keystroke
   });
   els.rotateBtn.addEventListener("click", function(){
-    var w=els.widthInput.value; els.widthInput.value=els.heightInput.value; els.heightInput.value=w; applySize(); syncAddToGridCheckbox();
+    var w=els.widthInput.value; els.widthInput.value=els.heightInput.value; els.heightInput.value=w; applySize(); syncAddToGridCheckbox(); reloadIfLoaded();
   });
   els.zoomIn.addEventListener("click", function(){ els.autoFit.checked=false; zoom=Math.min(2,zoom+0.1); applyZoom(); });
   els.zoomOut.addEventListener("click", function(){ els.autoFit.checked=false; zoom=Math.max(0.1,zoom-0.1); applyZoom(); });
