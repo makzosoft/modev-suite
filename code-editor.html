@@ -141,6 +141,12 @@
   #breadcrumb span{color:var(--accent); cursor:pointer;}
   #breadcrumb span:last-child{color:var(--muted); cursor:default;}
   #fileActions{display:flex; gap:6px; padding:8px; border-bottom:1px solid var(--border);}
+  .row{display:flex; gap:8px; align-items:center;}
+  #sourceTabs{display:flex; gap:4px; padding:8px; border-bottom:1px solid var(--border);}
+  .src-tab{flex:1; padding:7px 6px; font-size:11.5px; border-radius:6px;}
+  .src-tab.active{background:var(--accent-grad); border-color:transparent; color:#fff; font-weight:600;}
+  #localFileTree .row-item, #fileTree .row-item{position:relative;}
+  .local-writable-badge{font-size:9.5px; color:var(--good); margin-left:4px;}
   #fileActions button{flex:1; font-size:11.5px; padding:6px 4px;}
   #fileFilter{margin:8px 8px 0;}
   #fileTree{flex:1; overflow-y:auto; padding:6px;}
@@ -291,13 +297,29 @@
   <div id="body">
     <div id="fileDrawerBackdrop"></div>
     <div id="fileDrawer">
-      <div id="breadcrumb"></div>
-      <div id="fileActions">
-        <button id="newFileBtn">＋ File</button>
-        <button id="newFolderBtn">＋ Folder</button>
+      <div id="sourceTabs">
+        <button id="sourceTabGh" class="src-tab active">🐙 GitHub</button>
+        <button id="sourceTabLocal" class="src-tab">📁 Local folder</button>
       </div>
-      <input id="fileFilter" placeholder="Filter files…">
-      <div id="fileTree"></div>
+      <div id="ghSourcePane">
+        <div id="breadcrumb"></div>
+        <div id="fileActions">
+          <button id="newFileBtn">＋ File</button>
+          <button id="newFolderBtn">＋ Folder</button>
+        </div>
+        <input id="fileFilter" placeholder="Filter files…">
+        <div id="fileTree"></div>
+      </div>
+      <div id="localSourcePane" style="display:none;">
+        <div id="localConnectRow" class="row" style="padding:8px;">
+          <button id="localConnectBtn">📁 Select folder</button>
+          <input id="localFolderInput" type="file" webkitdirectory directory multiple style="display:none;">
+        </div>
+        <div id="localBreadcrumb" style="display:none; padding:8px 10px; font-size:11.5px; color:var(--muted); border-bottom:1px solid var(--border); overflow-x:auto; white-space:nowrap;"></div>
+        <input id="localFileFilter" placeholder="Filter files…" style="display:none;">
+        <div id="localFileTree"></div>
+        <p id="localStatus" style="font-size:11px; color:var(--muted); padding:0 10px;"></p>
+      </div>
     </div>
     <div id="editorPane">
       <div id="editorHost"><div id="emptyEditor">Open ☰ and pick a file, or create a new one, to start editing.</div></div>
@@ -377,6 +399,8 @@
   ["loadingScreen","connectScreen","tokenInput","showTokenBtn","connectBtn","connectStatus","app",
    "drawerToggle","repoSelect","branchSelect","fileLabel","fontDown","fontUp","findBtn","formatBtn","saveBtn","topStatus",
    "tabsBar","fileDrawerBackdrop","fileDrawer","breadcrumb","fileActions","newFileBtn","newFolderBtn","fileFilter","fileTree",
+   "sourceTabGh","sourceTabLocal","ghSourcePane","localSourcePane",
+   "localConnectBtn","localFolderInput","localBreadcrumb","localFileFilter","localFileTree","localStatus",
    "editorHost","emptyEditor","quickbar","emmetBtn","undoBtn","redoBtn",
    "moreBtn","moreBackdrop","moreDrawer","moreClose","newRepoBtn",
    "previewBtn","previewPane","previewTitle","previewDeviceSelect","previewRefresh","previewCloseBtn",
@@ -410,7 +434,11 @@
   function setConnectStatus(msg, kind){ els.connectStatus.textContent = msg||""; els.connectStatus.className = kind||""; }
   function saveEditorState(){ try{ localStorage.setItem(STATE_KEY, JSON.stringify({owner:gh.owner, repo:gh.repo, branch:gh.branch, path:gh.path, filePath:gh.filePath||null})); }catch(e){} }
   function loadEditorState(){ try{ return JSON.parse(localStorage.getItem(STATE_KEY)) || {}; }catch(e){ return {}; } }
-  function draftKey(path){ return "codeEditor.draft::" + gh.owner + "/" + gh.repo + "/" + gh.branch + "/" + path; }
+  function draftKey(buf){
+    if (typeof buf === "string") buf = { path: buf, source: "github" }; // legacy call sites passing a bare path = GitHub
+    if (buf.source === "local-fsa" || buf.source === "local-webkit") return "codeEditor.draft::local/" + (localRootName || "folder") + "/" + buf.path;
+    return "codeEditor.draft::" + gh.owner + "/" + gh.repo + "/" + gh.branch + "/" + buf.path;
+  }
   var pendingFile = null;
 
   function activeBuffer(){ return buffers.find(function(b){ return b.id === activeId; }); }
@@ -658,7 +686,7 @@
         if (buf.id === activeId) schedulePreviewRefresh();
         clearTimeout(buf.draftTimer);
         buf.draftTimer = setTimeout(function(){
-          try{ localStorage.setItem(draftKey(buf.path), u.state.doc.toString()); }catch(e){}
+          try{ localStorage.setItem(draftKey(buf), u.state.doc.toString()); }catch(e){}
         }, 600);
       })];
     var lang = langExtensionFor(buf.ext);
@@ -672,7 +700,8 @@
       var chip = document.createElement("div");
       chip.className = "tab-chip" + (buf.id === activeId ? " active" : "");
       var name = buf.path.split("/").pop();
-      chip.innerHTML = (buf.dirty ? '<span class="dot"></span>' : '') + '<span>' + name + (buf.isNew ? " (new)" : "") + '</span>';
+      var srcIcon = (buf.source === "local-fsa" || buf.source === "local-webkit") ? "📁 " : "";
+      chip.innerHTML = (buf.dirty ? '<span class="dot"></span>' : '') + '<span>' + srcIcon + name + (buf.isNew ? " (new)" : "") + '</span>';
       var x = document.createElement("span");
       x.className = "x"; x.textContent = "✕";
       x.addEventListener("click", function(e){ e.stopPropagation(); closeTab(buf.id); });
@@ -696,7 +725,8 @@
     } else {
       view.setState(buf.state);
     }
-    els.fileLabel.textContent = buf.path + (buf.isNew ? " (not on GitHub yet)" : "");
+    var srcTag = buf.source === "local-fsa" ? " (local)" : buf.source === "local-webkit" ? " (local, read-only save)" : (buf.isNew ? " (not on GitHub yet)" : "");
+    els.fileLabel.textContent = buf.path + srcTag;
     els.fileLabel.classList.toggle("dirty", !!buf.dirty);
     gh.filePath = buf.path;
     saveEditorState();
@@ -740,7 +770,7 @@
         var draft = null;
         try{ draft = localStorage.getItem(draftKey(path)); }catch(e){}
         var hasDraft = draft !== null && draft !== remoteContent;
-        var buf = { id: bufIdSeq++, path: path, ext: ext, sha: data.sha, isNew: false, dirty: hasDraft, draftTimer: null };
+        var buf = { id: bufIdSeq++, path: path, ext: ext, sha: data.sha, isNew: false, dirty: hasDraft, draftTimer: null, source: "github" };
         buf.state = EditorState.create({ doc: hasDraft ? draft : remoteContent, extensions: extensionsFor(buf) });
         buffers.push(buf);
         switchToBuffer(buf.id);
@@ -750,13 +780,198 @@
       .catch(function(err){ setStatus(err.message, "err"); });
   }
 
+  // ------------------------------------------------------------------
+  // Local folder source — same dual-method connection Device Lab uses
+  // (File System Access API on desktop, <input webkitdirectory> on
+  // Android). File System Access handles support real write-back via
+  // createWritable(), so Save can genuinely save in place on desktop.
+  // webkitdirectory is read-only by platform design — Android exposes
+  // no write API for files picked that way — so Save there downloads
+  // the edited file instead, clearly labeled so it's never mistaken
+  // for an in-place save.
+  // ------------------------------------------------------------------
+  var localDirHandle = null;
+  var localFileMap = null;
+  var localRootName = null;
+  var localCurrentPath = "";
+  var EDITABLE_EXT = /\.(html?|css|scss|less|js|mjs|jsx|ts|tsx|json|md|markdown|txt|xml|svg|yml|yaml|py|rb|go|rs|java|c|cpp|h|sh|env|gitignore)$/i;
+
+  els.sourceTabGh.addEventListener("click", function(){
+    els.sourceTabGh.classList.add("active"); els.sourceTabLocal.classList.remove("active");
+    els.ghSourcePane.style.display = "block"; els.localSourcePane.style.display = "none";
+  });
+  els.sourceTabLocal.addEventListener("click", function(){
+    els.sourceTabLocal.classList.add("active"); els.sourceTabGh.classList.remove("active");
+    els.localSourcePane.style.display = "block"; els.ghSourcePane.style.display = "none";
+  });
+
+  function resolveLocalHandleByPath(dirHandle, path){
+    var parts = path.split("/").filter(Boolean);
+    var p = Promise.resolve(dirHandle);
+    parts.forEach(function(part, i){
+      p = p.then(function(handle){
+        return (i === parts.length - 1) ? handle.getFileHandle(part) : handle.getDirectoryHandle(part);
+      });
+    });
+    return p;
+  }
+  function getLocalBlob(path){
+    if (localFileMap && localFileMap[path]) return Promise.resolve(localFileMap[path]);
+    if (localDirHandle) return resolveLocalHandleByPath(localDirHandle, path).then(function(fh){ return fh.getFile(); });
+    return Promise.reject(new Error("File not available"));
+  }
+
+  var supportsFSAccessLocal = typeof window.showDirectoryPicker === "function";
+  els.localConnectBtn.addEventListener("click", function(){
+    if (supportsFSAccessLocal){
+      window.showDirectoryPicker().then(function(handle){
+        localDirHandle = handle; localFileMap = null; localRootName = handle.name;
+        els.localStatus.textContent = "Scanning…";
+        var results = [];
+        walkLocalDirHandle(handle, "", 0, results).then(function(){
+          finishLocalConnect(results, handle.name);
+        });
+      }).catch(function(){});
+    } else {
+      els.localFolderInput.click();
+    }
+  });
+  function walkLocalDirHandle(dirHandle, relPath, depth, results){
+    if (depth > 8) return Promise.resolve();
+    return (async function(){
+      var entries = [];
+      for await (var entry of dirHandle.values()) entries.push(entry);
+      return entries;
+    })().then(function(entries){
+      return Promise.all(entries.map(function(handle){
+        var name = handle.name;
+        if (/^(node_modules|\.git|\.vscode|dist|build|\.next|\.cache)$/i.test(name)) return Promise.resolve();
+        if (handle.kind === "directory") return walkLocalDirHandle(handle, relPath ? relPath+"/"+name : name, depth+1, results);
+        if (handle.kind === "file" && EDITABLE_EXT.test(name)) results.push(relPath ? relPath+"/"+name : name);
+        return Promise.resolve();
+      }));
+    });
+  }
+  els.localFolderInput.addEventListener("change", function(){
+    var files = Array.prototype.slice.call(els.localFolderInput.files || []);
+    if (!files.length) return;
+    localDirHandle = null; localFileMap = {};
+    var rootName = (files[0].webkitRelativePath || "").split("/")[0] || "folder";
+    localRootName = rootName;
+    files.forEach(function(f){
+      var rel = (f.webkitRelativePath || f.name).split("/").slice(1).join("/") || f.name;
+      localFileMap[rel] = f;
+    });
+    var editablePaths = Object.keys(localFileMap).filter(function(p){ return EDITABLE_EXT.test(p); });
+    finishLocalConnect(editablePaths, rootName);
+  });
+  var localAllFiles = [];
+  function finishLocalConnect(paths, rootName){
+    localAllFiles = paths.sort();
+    els.localConnectBtn.textContent = "📁 " + rootName;
+    els.localBreadcrumb.style.display = "block";
+    els.localFileFilter.style.display = "block";
+    renderLocalBreadcrumb();
+    renderLocalFileTree();
+    els.localStatus.textContent = paths.length + " editable file(s) found" + (supportsFSAccessLocal ? "" : " — Save will download edited files (Android can't write back in place)");
+  }
+  function renderLocalBreadcrumb(){
+    var parts = localCurrentPath ? localCurrentPath.split("/") : [];
+    var html2 = '<span data-path="">' + (localRootName || "folder") + "</span>";
+    var acc = "";
+    parts.forEach(function(p){ acc = acc ? acc+"/"+p : p; html2 += " / <span data-path=\""+acc+"\">"+p+"</span>"; });
+    els.localBreadcrumb.innerHTML = html2;
+    Array.prototype.slice.call(els.localBreadcrumb.querySelectorAll("span")).forEach(function(s){
+      s.addEventListener("click", function(){ localCurrentPath = s.getAttribute("data-path"); renderLocalBreadcrumb(); renderLocalFileTree(); });
+    });
+  }
+  function renderLocalFileTree(){
+    els.localFileTree.innerHTML = "";
+    var q = els.localFileFilter.value.trim().toLowerCase();
+    var prefix = localCurrentPath ? localCurrentPath + "/" : "";
+    var seenDirs = {};
+    var rows = [];
+    localAllFiles.forEach(function(p){
+      if (prefix && p.indexOf(prefix) !== 0) return;
+      var rest = p.slice(prefix.length);
+      var slash = rest.indexOf("/");
+      if (slash === -1){
+        if (!q || rest.toLowerCase().indexOf(q) !== -1) rows.push({ type:"file", name: rest, path: p });
+      } else {
+        var dirName = rest.slice(0, slash);
+        if (!seenDirs[dirName] && (!q || dirName.toLowerCase().indexOf(q) !== -1)){
+          seenDirs[dirName] = true;
+          rows.push({ type:"dir", name: dirName, path: prefix + dirName });
+        }
+      }
+    });
+    rows.sort(function(a,b){ if (a.type!==b.type) return a.type==="dir"?-1:1; return a.name.localeCompare(b.name); });
+    rows.forEach(function(r){
+      var row = document.createElement("div");
+      row.className = "row-item";
+      row.innerHTML = '<span>' + (r.type==="dir"?"📁":"📄") + '</span><span class="nm">' + r.name + "</span>";
+      row.addEventListener("click", function(){
+        if (r.type === "dir"){ localCurrentPath = r.path; renderLocalBreadcrumb(); renderLocalFileTree(); }
+        else openLocalFileInEditor(r.path);
+      });
+      els.localFileTree.appendChild(row);
+    });
+  }
+  els.localFileFilter.addEventListener("input", renderLocalFileTree);
+
+  function openLocalFileInEditor(path){
+    var existing = buffers.find(function(b){ return b.path === path && b.source !== "github"; });
+    if (existing){ switchToBuffer(existing.id); closeDrawer(); return; }
+    setStatus("Opening " + path + "…");
+    getLocalBlob(path).then(function(blob){ return blob.text(); }).then(function(content){
+      var ext = extOf(path);
+      var source = localDirHandle ? "local-fsa" : "local-webkit";
+      var bufShell = { path: path, source: source };
+      var draft = null;
+      try{ draft = localStorage.getItem(draftKey(bufShell)); }catch(e){}
+      var hasDraft = draft !== null && draft !== content;
+      var buf = { id: bufIdSeq++, path: path, ext: ext, isNew: false, dirty: hasDraft, draftTimer: null, source: source };
+      buf.state = EditorState.create({ doc: hasDraft ? draft : content, extensions: extensionsFor(buf) });
+      buffers.push(buf);
+      switchToBuffer(buf.id);
+      setStatus(hasDraft ? "Restored an unsaved draft — tap Save" : "Loaded", "ok");
+      closeDrawer();
+    }).catch(function(err){ setStatus("Couldn't open: " + err.message, "err"); });
+  }
+
+  function saveLocalFsa(buf, content){
+    return resolveLocalHandleByPath(localDirHandle, buf.path)
+      .then(function(fh){ return fh.createWritable(); })
+      .then(function(writable){ return writable.write(content).then(function(){ return writable.close(); }); })
+      .then(function(){
+        buf.dirty = false;
+        try{ localStorage.removeItem(draftKey(buf)); }catch(e){}
+        els.fileLabel.classList.remove("dirty");
+        renderTabs();
+        setStatus("Saved to disk ✓", "ok");
+      });
+  }
+  function saveLocalWebkitDownload(buf, content){
+    var blob = new Blob([content], { type: "text/plain" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = buf.path.split("/").pop();
+    a.click();
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+    buf.dirty = false;
+    try{ localStorage.removeItem(draftKey(buf)); }catch(e){}
+    els.fileLabel.classList.remove("dirty");
+    renderTabs();
+    setStatus("Downloaded — replace the file manually (Android can't write back in place)", "ok");
+  }
+
   els.newFileBtn.addEventListener("click", function(){
     var name = prompt("New file path, relative to /" + (gh.path || "") + ":", "");
     if (!name) return;
     var fullPath = (gh.path ? gh.path + "/" : "") + name.replace(/^\/+/, "");
     var existing = buffers.find(function(b){ return b.path === fullPath; });
     if (existing){ switchToBuffer(existing.id); closeDrawer(); return; }
-    var buf = { id: bufIdSeq++, path: fullPath, ext: extOf(fullPath), sha: null, isNew: true, dirty: true, draftTimer: null };
+    var buf = { id: bufIdSeq++, path: fullPath, ext: extOf(fullPath), sha: null, isNew: true, dirty: true, draftTimer: null, source: "github" };
     buf.state = EditorState.create({ doc: "", extensions: extensionsFor(buf) });
     buffers.push(buf);
     switchToBuffer(buf.id);
@@ -770,7 +985,7 @@
     var fullPath = folder + "/.gitkeep";
     var existing = buffers.find(function(b){ return b.path === fullPath; });
     if (existing){ switchToBuffer(existing.id); closeDrawer(); return; }
-    var buf = { id: bufIdSeq++, path: fullPath, ext: "", sha: null, isNew: true, dirty: true, draftTimer: null };
+    var buf = { id: bufIdSeq++, path: fullPath, ext: "", sha: null, isNew: true, dirty: true, draftTimer: null, source: "github" };
     buf.state = EditorState.create({ doc: "", extensions: extensionsFor(buf) });
     buffers.push(buf);
     switchToBuffer(buf.id);
@@ -784,13 +999,23 @@
     if (!buf || !view){ setStatus("No file open", "err"); return; }
     buf.state = view.state;
     var content = buf.state.doc.toString();
-    setStatus("Saving…");
 
+    if (buf.source === "local-fsa"){
+      setStatus("Saving to disk…");
+      saveLocalFsa(buf, content).catch(function(err){ setStatus("Save failed: " + err.message, "err"); });
+      return;
+    }
+    if (buf.source === "local-webkit"){
+      saveLocalWebkitDownload(buf, content);
+      return;
+    }
+
+    setStatus("Saving…");
     function finishSave(sha){
       return putRaw(buf.path, b64Encode(content), (buf.isNew ? "Add " : "Edit ") + buf.path + " via Modev Suite", sha)
         .then(function(data){
           buf.sha = data.content.sha; buf.isNew = false; buf.dirty = false;
-          try{ localStorage.removeItem(draftKey(buf.path)); }catch(e){}
+          try{ localStorage.removeItem(draftKey(buf)); }catch(e){}
           els.fileLabel.classList.remove("dirty");
           els.fileLabel.textContent = buf.path;
           renderTabs();
@@ -975,15 +1200,28 @@
     return baseDir.join("/");
   }
 
-  function fetchTextForPreview(path){
-    // Prefer an already-open, possibly-unsaved buffer over the committed GitHub copy.
+  function fetchTextForPreview(path, source){
+    // Prefer an already-open, possibly-unsaved buffer over the committed copy.
     var buf = buffers.find(function(b){ return b.path === path; });
     if (buf) return Promise.resolve(buf.id === activeId && view ? view.state.doc.toString() : buf.state.doc.toString());
+    if (source === "local-fsa" || source === "local-webkit"){
+      return getLocalBlob(path).then(function(blob){ return blob.text(); });
+    }
     var url = API + "/repos/" + gh.owner + "/" + gh.repo + "/contents/" + encodeApiPath(path) + "?ref=" + encodeURIComponent(gh.branch);
     return fetch(url, { headers: ghHeaders() }).then(function(r){ if (!r.ok) throw new Error("404"); return r.json(); })
       .then(function(d){ return b64Decode(d.content); });
   }
-  function fetchRawBase64(path){
+  function fetchRawBase64(path, source){
+    if (source === "local-fsa" || source === "local-webkit"){
+      return getLocalBlob(path).then(function(blob){
+        return new Promise(function(resolve, reject){
+          var r = new FileReader();
+          r.onload = function(){ resolve(String(r.result).split(",")[1] || ""); };
+          r.onerror = reject;
+          r.readAsDataURL(blob);
+        });
+      });
+    }
     var url = API + "/repos/" + gh.owner + "/" + gh.repo + "/contents/" + encodeApiPath(path) + "?ref=" + encodeURIComponent(gh.branch);
     return fetch(url, { headers: ghHeaders() }).then(function(r){ if (!r.ok) throw new Error("Couldn't load file (" + r.status + ")"); return r.json(); })
       .then(function(d){ return d.content.replace(/\n/g, ""); });
@@ -1003,14 +1241,14 @@
       var resolved = resolveRelative(buf.path, href);
       if (!resolved) return m;
       var idx = fetches.length;
-      fetches.push(fetchTextForPreview(resolved).then(function(css){ return "<style>" + css + "</style>"; }).catch(function(){ return "<!-- couldn't load " + href + " -->"; }));
+      fetches.push(fetchTextForPreview(resolved, buf.source).then(function(css){ return "<style>" + css + "</style>"; }).catch(function(){ return "<!-- couldn't load " + href + " -->"; }));
       return "@@INLINE" + idx + "@@";
     });
     html2 = html2.replace(/<script[^>]+src=["']([^"']+)["'][^>]*><\/script>/gi, function(m, src){
       var resolved = resolveRelative(buf.path, src);
       if (!resolved) return m;
       var idx = fetches.length;
-      fetches.push(fetchTextForPreview(resolved).then(function(js){ return "<script>" + js + "<" + "/script>"; }).catch(function(){ return "<!-- couldn't load " + src + " -->"; }));
+      fetches.push(fetchTextForPreview(resolved, buf.source).then(function(js){ return "<script>" + js + "<" + "/script>"; }).catch(function(){ return "<!-- couldn't load " + src + " -->"; }));
       return "@@INLINE" + idx + "@@";
     });
     return Promise.all(fetches).then(function(parts){
@@ -1059,20 +1297,20 @@
     if (IMAGE_EXT.test(ext)){
       showFrame("img");
       var mime = MIME_BY_EXT[ext] || "image/*";
-      fetchRawBase64(buf.path).then(function(b64){ els.previewImg.src = "data:" + mime + ";base64," + b64; els.previewFrameHolder.classList.add("full"); })
+      fetchRawBase64(buf.path, buf.source).then(function(b64){ els.previewImg.src = "data:" + mime + ";base64," + b64; els.previewFrameHolder.classList.add("full"); })
         .catch(function(err){ setStatus("Preview failed: " + err.message, "err"); });
       return;
     }
     if (VIDEO_EXT.test(ext)){
       showFrame("video");
       var vmime = MIME_BY_EXT[ext] || "video/mp4";
-      fetchRawBase64(buf.path).then(function(b64){ els.previewVideo.src = "data:" + vmime + ";base64," + b64; els.previewFrameHolder.classList.add("full"); })
+      fetchRawBase64(buf.path, buf.source).then(function(b64){ els.previewVideo.src = "data:" + vmime + ";base64," + b64; els.previewFrameHolder.classList.add("full"); })
         .catch(function(err){ setStatus("Preview failed: " + err.message, "err"); });
       return;
     }
     if (ext === "pdf"){
       showFrame("frame");
-      fetchRawBase64(buf.path).then(function(b64){
+      fetchRawBase64(buf.path, buf.source).then(function(b64){
         els.previewFrame.removeAttribute("srcdoc");
         els.previewFrame.src = "data:application/pdf;base64," + b64;
         els.previewFrameHolder.classList.add("full");
