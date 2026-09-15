@@ -1,0 +1,1158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Code Editor</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, interactive-widget=resizes-content">
+<style>
+  :root{
+    --bg:#0a0e27; --panel:#12163a; --panel-2:#181c44; --border:#2c3168;
+    --text:#e7e9ee; --muted:#9aa0b0; --accent:#7c3aed; --accent-grad:linear-gradient(135deg,#6826fc,#d727f1); --accent-2:#5b21b6;
+    --good:#5bd18a; --bad:#ff8080;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-size:14px; overscroll-behavior:none;}
+  button,input,select{font-family:inherit;}
+  input,select,button{
+    background:var(--panel-2); color:var(--text); border:1px solid var(--border);
+    border-radius:6px; padding:7px 9px; font-size:13px; outline:none;
+  }
+  button{cursor:pointer;}
+  button.primary{background:var(--accent-grad); border-color:transparent; color:#fff; font-weight:600;}
+  button.small{padding:5px 8px; font-size:12px;}
+  button.icon{width:32px; height:32px; padding:0; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+
+  #connectScreen{
+    max-width:420px; margin:60px auto; padding:24px; background:var(--panel);
+    border:1px solid var(--border); border-radius:12px; line-height:1.6;
+  }
+  #connectScreen h2{margin-top:0; font-size:18px;}
+  #connectScreen ol{padding-left:20px; color:var(--muted); font-size:13px;}
+  #connectScreen code{background:var(--panel-2); padding:1px 5px; border-radius:4px;}
+  #tokenRow{display:flex; gap:8px; margin-top:14px;}
+  #tokenInput{flex:1;}
+  #connectStatus{margin-top:10px; font-size:13px; min-height:18px;}
+  #connectStatus.err{color:var(--bad);}
+  #connectStatus.ok{color:var(--good);}
+
+  #app{display:none; height:100%; flex-direction:column;}
+  #app.show{display:flex;}
+  #topbar{
+    display:flex; align-items:center; gap:6px; flex-wrap:wrap;
+    padding:7px 10px; background:var(--panel); border-bottom:1px solid var(--border);
+  }
+  #repoSelect{max-width:130px;} #branchSelect{max-width:90px;}
+  #fileLabel{font-size:12.5px; color:var(--muted); flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  #fileLabel.dirty::after{content:" •"; color:var(--accent);}
+  #topStatus{font-size:11.5px; color:var(--muted); max-width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  #topStatus.err{color:var(--bad);} #topStatus.ok{color:var(--good);}
+
+  /* Autocomplete: force CM6's tooltip out of cursor-relative position into a fixed top bar */
+  .cm-tooltip.cm-suggest-top{
+    position: fixed !important;
+    top: 54px !important;
+    left: 8px !important;
+    right: 8px !important;
+    bottom: auto !important;
+    max-width: none !important;
+    z-index: 65;
+    border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.5);
+  }
+  .cm-tooltip.cm-suggest-top ul{ max-height: 38vh; }
+  .cm-tooltip.cm-suggest-top li{ padding: 10px 12px !important; min-height: 20px; }
+  .cm-tooltip.cm-suggest-top .cm-completionLabel{ font-size: 14px; }
+
+  #moreBackdrop{display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:85;}
+  #moreBackdrop.open{display:block;}
+  #moreDrawer{
+    position:fixed; left:0; right:0; bottom:0; max-height:75vh; background:var(--panel);
+    border-top:1px solid var(--border); border-radius:14px 14px 0 0; z-index:90;
+    transform:translateY(105%); transition:transform .2s ease; display:flex; flex-direction:column; overflow-y:auto;
+  }
+  #moreDrawer.open{transform:translateY(0);}
+  .more-head{display:flex; align-items:center; gap:8px; padding:12px; border-bottom:1px solid var(--border);}
+  .more-head b{font-size:14px; flex:1;}
+  .more-section{padding:12px; border-bottom:1px solid var(--border); display:flex; flex-direction:column; gap:8px;}
+  .more-section:last-child{border-bottom:none;}
+  .more-label{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px;}
+  .more-section button{width:100%; text-align:left; padding:10px 12px;}
+  .more-row{display:flex; gap:8px;}
+  .more-row button{flex:1; text-align:center;}
+
+  #previewPane{
+    position:fixed; top:0; right:0; bottom:0; width:44%; min-width:280px; background:var(--panel);
+    border-left:1px solid var(--border); z-index:70; display:none; flex-direction:column;
+    transform:translateX(100%); transition:transform .2s ease;
+  }
+  #previewPane.open{display:flex; transform:translateX(0);}
+  @media (max-width:900px){ #previewPane{width:100%;} }
+  #previewHead{display:flex; align-items:center; gap:6px; padding:8px 10px; border-bottom:1px solid var(--border); font-size:12px; flex-wrap:wrap;}
+  #previewHead b{color:var(--muted); font-weight:500; width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  #previewDeviceSelect{max-width:150px;}
+  #previewStage{flex:1; min-height:0; background:#12141a; overflow:auto; display:flex; align-items:flex-start; justify-content:center; padding:16px; position:relative;}
+  #previewFrameHolder{background:#000; border-radius:10px; padding:6px; box-shadow:0 10px 26px rgba(0,0,0,.4); flex-shrink:0;}
+  #previewFrameHolder.full{background:transparent; padding:0; box-shadow:none; width:100%; height:100%;}
+  #previewFrame{border:none; display:block; background:#fff; border-radius:4px;}
+  #previewImg, #previewVideo{max-width:100%; max-height:80vh; display:block; margin:auto; border-radius:4px;}
+
+  #consoleToggle{
+    position:absolute; right:14px; bottom:14px; width:44px; height:44px; border-radius:50%;
+    background:var(--accent); color:#fff; border:none; font-size:18px; display:flex; align-items:center;
+    justify-content:center; box-shadow:0 6px 18px rgba(0,0,0,.4); z-index:75;
+  }
+  #consoleToggle .badge{
+    position:absolute; top:-3px; right:-3px; background:var(--bad); color:#fff; font-size:9px; font-weight:700;
+    border-radius:8px; min-width:15px; height:15px; display:none; align-items:center; justify-content:center; padding:0 2px;
+  }
+  #consoleToggle .badge.show{display:flex;}
+  #consoleWrap{
+    position:fixed; left:0; right:0; bottom:0; height:42%; min-height:160px; display:none; flex-direction:column;
+    border-top:1px solid var(--border); background:#0e0f13; z-index:76; border-radius:12px 12px 0 0;
+    box-shadow:0 -10px 30px rgba(0,0,0,.4);
+  }
+  #consoleWrap.open{display:flex;}
+  #previewPane:not(.wide) #consoleWrap{position:absolute;}
+  #consoleHead{padding:8px 10px; font-size:11px; color:var(--muted); border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px;}
+  #consoleLog{flex:1; overflow-y:auto; padding:6px 10px; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:11px;}
+  .plog{padding:2px 0; white-space:pre-wrap; word-break:break-word; border-bottom:1px solid rgba(255,255,255,.05);}
+  .plog.error{color:var(--bad);} .plog.warn{color:#f0c33c;} .plog.result{color:var(--good);}
+  #replRow{display:flex; gap:6px; padding:6px 8px; border-top:1px solid var(--border);}
+  #replInput{flex:1; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px;}
+
+  #tabsBar{display:flex; gap:4px; overflow-x:auto; padding:6px 8px; background:var(--panel-2); border-bottom:1px solid var(--border); -webkit-overflow-scrolling:touch;}
+  #tabsBar:empty{display:none;}
+  .tab-chip{display:flex; align-items:center; gap:6px; padding:6px 10px; border-radius:8px; background:var(--panel); border:1px solid var(--border); font-size:12px; flex-shrink:0; cursor:pointer; white-space:nowrap;}
+  .tab-chip.active{border-color:var(--accent); color:var(--text); background:var(--panel-2);}
+  .tab-chip .dot{width:6px; height:6px; border-radius:50%; background:var(--accent); flex-shrink:0;}
+  .tab-chip .x{padding:0 2px; color:var(--muted); font-size:13px;}
+  .tab-chip .x:hover{color:var(--bad);}
+
+  #body{flex:1; display:flex; min-height:0; position:relative;}
+
+  #fileDrawerBackdrop{display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:40;}
+  #fileDrawerBackdrop.open{display:block;}
+  #fileDrawer{
+    width:230px; flex-shrink:0; background:var(--panel); border-right:1px solid var(--border);
+    display:flex; flex-direction:column; overflow:hidden;
+  }
+  #breadcrumb{padding:8px 10px; font-size:11.5px; color:var(--muted); border-bottom:1px solid var(--border); overflow-x:auto; white-space:nowrap;}
+  #breadcrumb span{color:var(--accent); cursor:pointer;}
+  #breadcrumb span:last-child{color:var(--muted); cursor:default;}
+  #fileActions{display:flex; gap:6px; padding:8px; border-bottom:1px solid var(--border);}
+  #fileActions button{flex:1; font-size:11.5px; padding:6px 4px;}
+  #fileFilter{margin:8px 8px 0;}
+  #fileTree{flex:1; overflow-y:auto; padding:6px;}
+  .row-item{display:flex; align-items:center; gap:6px; padding:9px 8px; border-radius:8px; margin-bottom:2px; font-size:13px; cursor:pointer;}
+  .row-item:hover{background:var(--panel-2);}
+  .row-item.active{background:var(--accent); color:#fff;}
+  .row-item .nm{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .row-item button{flex-shrink:0;}
+
+  #editorPane{flex:1; display:flex; flex-direction:column; min-width:0;}
+  #editorHost{flex:1; overflow:auto; min-height:0;}
+  .cm-editor{height:100%; font-size:var(--editor-fs, 14px);}
+  .cm-scroller{overflow:auto;}
+
+  #quickbar{
+    display:flex; gap:4px; overflow-x:auto; padding:6px 8px; background:var(--panel);
+    border-top:1px solid var(--border); flex-shrink:0; -webkit-overflow-scrolling:touch;
+  }
+  #quickbar button{flex-shrink:0; min-width:36px; font-family:monospace; font-size:14px;}
+
+  #emptyEditor{margin:auto; color:var(--muted); text-align:center; padding:20px; max-width:320px; line-height:1.6;}
+
+  @media (max-width:760px){
+    #fileDrawer{position:fixed; top:0; bottom:0; left:0; z-index:50; transform:translateX(-100%); transition:transform .2s ease;}
+    #fileDrawer.open{transform:translateX(0);}
+  }
+
+  #loadingScreen{
+    display:none; align-items:center; justify-content:center; height:100%;
+    flex-direction:column; gap:12px; color:var(--muted); font-size:13px;
+  }
+  .spinner{
+    width:28px; height:28px; border-radius:50%; border:3px solid var(--border);
+    border-top-color:var(--accent); animation:spin .8s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  /* ---------- Mobile-first micro-animations ---------- */
+  button, .row-item, .tab-chip{transition:transform .1s ease, background .15s ease;}
+  button:active{transform:scale(.93);}
+  .row-item, .tab-chip{animation:fadeInUp .16s ease both;}
+  @keyframes fadeInUp{ from{opacity:0; transform:translateY(5px);} to{opacity:1; transform:translateY(0);} }
+  #connectScreen{animation:fadeInUp .25s ease both;}
+</style>
+<script>
+(function(){
+  var TOOL_NAME = "code-editor";
+  function send(level, args){
+    if (window.parent === window) return;
+    try{
+      var text = Array.prototype.map.call(args, function(a){
+        if (typeof a === "string") return a;
+        try{ return JSON.stringify(a); }catch(e){ return String(a); }
+      }).join(" ");
+      parent.postMessage({__devConsole:true, tool:TOOL_NAME, level:level, time:Date.now(), text:text}, "*");
+    }catch(e){}
+  }
+  function callerLocation(){
+    try{
+      var lines = (new Error()).stack.split("\n").slice(3);
+      var line = lines.find(function(l){ return l && l.indexOf("callerLocation") === -1; }) || lines[0] || "";
+      var m = /((?:https?:\/\/|file:\/\/)[^\s)]+?):(\d+):(\d+)/.exec(line);
+      if (!m) return "";
+      var file = m[1].split("/").pop();
+      return " \u2014 " + file + ":" + m[2];
+    }catch(e){ return ""; }
+  }
+  ["log","warn","error","info","debug"].forEach(function(level){
+    var orig = console[level] ? console[level].bind(console) : function(){};
+    console[level] = function(){
+      var loc = (level === "error" || level === "warn") ? callerLocation() : "";
+      var args = Array.prototype.slice.call(arguments);
+      if (loc) args.push(loc);
+      send(level, args);
+      orig.apply(console, arguments);
+    };
+  });
+  window.addEventListener("error", function(e){
+    var file = (e.filename||"").split("/").pop();
+    send("error", [e.message + " \u2014 " + file + ":" + e.lineno + ":" + e.colno]);
+  });
+  window.addEventListener("unhandledrejection", function(e){
+    var reason = e.reason && e.reason.message ? e.reason.message : e.reason;
+    var stackLine = "";
+    try{
+      var m = /((?:https?:\/\/|file:\/\/)[^\s)]+?):(\d+):(\d+)/.exec((e.reason && e.reason.stack) || "");
+      if (m) stackLine = " \u2014 " + m[1].split("/").pop() + ":" + m[2];
+    }catch(err){}
+    send("error", ["Unhandled rejection: " + reason + stackLine]);
+  });
+})();
+</script>
+</head>
+<body>
+
+<div id="loadingScreen"><div class="spinner"></div><span>Checking for a saved GitHub connection…</span></div>
+
+<div id="connectScreen">
+  <h2>Connect to GitHub</h2>
+  <p style="color:var(--muted);font-size:13px;">Uses the same Personal Access Token approach as the GitHub tab.</p>
+  <ol>
+    <li>Go to <code>github.com/settings/tokens</code></li>
+    <li>Generate a token with repo access</li>
+    <li>Paste it below — stored only in this browser</li>
+  </ol>
+  <div id="tokenRow">
+    <input id="tokenInput" type="password" placeholder="ghp_xxxxxxxxxxxx" spellcheck="false" autocapitalize="off">
+    <button id="showTokenBtn" class="small">👁</button>
+    <button id="connectBtn" class="primary">Connect</button>
+  </div>
+  <div id="connectStatus"></div>
+</div>
+
+<div id="app">
+  <div id="topbar">
+    <button id="drawerToggle" class="icon">☰</button>
+    <button id="undoBtn" class="icon" title="Undo">↶</button>
+    <button id="redoBtn" class="icon" title="Redo">↷</button>
+    <select id="repoSelect"><option value="">Repo…</option></select>
+    <select id="branchSelect"><option value="">Branch…</option></select>
+    <span id="fileLabel">No file open</span>
+    <button id="previewBtn" class="small" title="Live preview (HTML files)">👁</button>
+    <button id="saveBtn" class="primary small" title="Commit to GitHub">💾 Save</button>
+    <button id="moreBtn" class="small" title="More">⋯</button>
+    <span id="topStatus"></span>
+  </div>
+
+  <div id="moreBackdrop"></div>
+  <div id="moreDrawer">
+    <div class="more-head"><b>More</b><button id="moreClose" class="small">Close</button></div>
+    <div class="more-section">
+      <label class="more-label">Repo</label>
+      <button id="newRepoBtn">➕ Create new repo</button>
+    </div>
+    <div class="more-section">
+      <label class="more-label">Editor</label>
+      <div class="more-row">
+        <button id="fontDown">A-</button>
+        <button id="fontUp">A+</button>
+        <button id="findBtn">🔍 Find &amp; replace</button>
+      </div>
+      <button id="formatBtn">✨ Format with Prettier</button>
+    </div>
+  </div>
+
+  <div id="tabsBar"></div>
+
+  <div id="body">
+    <div id="fileDrawerBackdrop"></div>
+    <div id="fileDrawer">
+      <div id="breadcrumb"></div>
+      <div id="fileActions">
+        <button id="newFileBtn">＋ File</button>
+        <button id="newFolderBtn">＋ Folder</button>
+      </div>
+      <input id="fileFilter" placeholder="Filter files…">
+      <div id="fileTree"></div>
+    </div>
+    <div id="editorPane">
+      <div id="editorHost"><div id="emptyEditor">Open ☰ and pick a file, or create a new one, to start editing.</div></div>
+      <div id="quickbar">
+        <button data-ins="\t">Tab</button>
+        <button data-ins="{">{ }</button>
+        <button data-ins="(">( )</button>
+        <button data-ins="[">[ ]</button>
+        <button data-ins='"'>" "</button>
+        <button data-ins="'">' '</button>
+        <button data-ins=";">;</button>
+        <button data-ins=":">:</button>
+        <button data-ins="<">&lt;</button>
+        <button data-ins=">">&gt;</button>
+        <button data-ins="/">/</button>
+        <button data-ins="=">=</button>
+        <button id="emmetBtn" title="Expand Emmet abbreviation">⚡Emmet</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="previewPane">
+  <div id="previewHead">
+    <b id="previewTitle">Live preview</b>
+    <select id="previewDeviceSelect"></select>
+    <button id="previewRefresh" class="icon small" title="Refresh">↻</button>
+    <button id="previewCloseBtn" class="icon small" title="Close">✕</button>
+  </div>
+  <div id="previewStage">
+    <div id="previewFrameHolder">
+      <iframe id="previewFrame" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
+      <img id="previewImg" style="display:none;">
+      <video id="previewVideo" controls style="display:none;"></video>
+    </div>
+  </div>
+  <button id="consoleToggle" title="Console & JS REPL">⌘<span class="badge" id="consoleBadge">0</span></button>
+  <div id="consoleWrap">
+    <div id="consoleHead">Console — logs from the preview, plus a JS REPL <button id="consoleClearBtn" class="icon small" style="margin-left:auto;">Clear</button><button id="consoleHideBtn" class="icon small">✕</button></div>
+    <div id="consoleLog"></div>
+    <div id="replRow">
+      <input id="replInput" placeholder="Run JS against the preview…">
+      <button id="replRun" class="small">Run</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  // Every CM6 sub-package below is pinned to versions verified against the npm registry,
+  // with ?deps= forcing them all onto the SAME @codemirror/state + @codemirror/view instance.
+  // (Mismatched versions of those two is the classic cause of "editor renders but typing does nothing".)
+  import { EditorView, basicSetup } from "https://esm.sh/codemirror@6.0.2?deps=@codemirror/state@6.7.4,@codemirror/view@6.43.11";
+  import { EditorState, Compartment } from "https://esm.sh/@codemirror/state@6.7.4";
+  import { html } from "https://esm.sh/@codemirror/lang-html@6.4.12?deps=@codemirror/state@6.7.4,@codemirror/view@6.43.11";
+  import { css } from "https://esm.sh/@codemirror/lang-css@6.3.1?deps=@codemirror/state@6.7.4,@codemirror/view@6.43.11";
+  import { javascript } from "https://esm.sh/@codemirror/lang-javascript@6.2.5?deps=@codemirror/state@6.7.4,@codemirror/view@6.43.11";
+  import { json } from "https://esm.sh/@codemirror/lang-json@6.0.2?deps=@codemirror/state@6.7.4,@codemirror/view@6.43.11";
+  import { markdown } from "https://esm.sh/@codemirror/lang-markdown@6.5.2?deps=@codemirror/state@6.7.4,@codemirror/view@6.43.11";
+  import { oneDark } from "https://esm.sh/@codemirror/theme-one-dark@6.1.3?deps=@codemirror/state@6.7.4,@codemirror/view@6.43.11";
+  import { indentUnit } from "https://esm.sh/@codemirror/language@6.12.4?deps=@codemirror/state@6.7.4,@codemirror/view@6.43.11";
+  import { undo, redo } from "https://esm.sh/@codemirror/commands@6.11.0?deps=@codemirror/state@6.7.4,@codemirror/view@6.43.11";
+  import { openSearchPanel } from "https://esm.sh/@codemirror/search@6.7.2?deps=@codemirror/state@6.7.4,@codemirror/view@6.43.11";
+  import { autocompletion } from "https://esm.sh/@codemirror/autocomplete@6.20.3?deps=@codemirror/state@6.7.4,@codemirror/view@6.43.11";
+  import expandEmmet from "https://esm.sh/emmet@2.4.11";
+
+  import * as prettier from "https://unpkg.com/prettier@3.9.6/standalone.mjs";
+  import prettierBabel from "https://unpkg.com/prettier@3.9.6/plugins/babel.mjs";
+  import prettierEstree from "https://unpkg.com/prettier@3.9.6/plugins/estree.mjs";
+  import prettierHtml from "https://unpkg.com/prettier@3.9.6/plugins/html.mjs";
+  import prettierPostcss from "https://unpkg.com/prettier@3.9.6/plugins/postcss.mjs";
+  import prettierMarkdown from "https://unpkg.com/prettier@3.9.6/plugins/markdown.mjs";
+
+  "use strict";
+
+  var API = "https://api.github.com";
+  var els = {};
+  ["loadingScreen","connectScreen","tokenInput","showTokenBtn","connectBtn","connectStatus","app",
+   "drawerToggle","repoSelect","branchSelect","fileLabel","fontDown","fontUp","findBtn","formatBtn","saveBtn","topStatus",
+   "tabsBar","fileDrawerBackdrop","fileDrawer","breadcrumb","fileActions","newFileBtn","newFolderBtn","fileFilter","fileTree",
+   "editorHost","emptyEditor","quickbar","emmetBtn","undoBtn","redoBtn",
+   "moreBtn","moreBackdrop","moreDrawer","moreClose","newRepoBtn",
+   "previewBtn","previewPane","previewTitle","previewDeviceSelect","previewRefresh","previewCloseBtn",
+   "previewStage","previewFrameHolder","previewFrame","previewImg","previewVideo",
+   "consoleToggle","consoleBadge","consoleHideBtn",
+   "consoleWrap","consoleLog","consoleClearBtn","replInput","replRun"
+  ].forEach(function(id){ els[id] = document.getElementById(id); });
+
+  function showScreen(name){
+    els.loadingScreen.style.display = name === "loading" ? "flex" : "none";
+    els.connectScreen.style.display = name === "connect" ? "block" : "none";
+    els.app.classList.toggle("show", name === "app");
+  }
+
+  var TOKEN_KEY = "ghUploader.token"; // shared name with the GitHub tab, reused if the browser shares storage
+  var STATE_KEY = "codeEditor.state.v1";
+  var FONT_KEY = "codeEditor.fontSize";
+
+  var gh = { token:null, owner:null, repo:null, branch:null, path:"", filePath:null };
+  var buffers = [];       // { id, path, ext, sha, isNew, dirty, state, draftTimer }
+  var activeId = null;
+  var bufIdSeq = 1;
+  var view = null;
+  var currentEntries = []; // last folder listing, for client-side filtering
+  var fontSize = parseInt(localStorage.getItem(FONT_KEY) || "14", 10);
+  document.documentElement.style.setProperty("--editor-fs", fontSize + "px");
+
+  function ghHeaders(){ return { "Authorization": "token " + gh.token, "Accept": "application/vnd.github+json" }; }
+  function encodeApiPath(p){ return p.split("/").filter(Boolean).map(encodeURIComponent).join("/"); }
+  function setStatus(msg, kind){ els.topStatus.textContent = msg||""; els.topStatus.className = kind||""; }
+  function setConnectStatus(msg, kind){ els.connectStatus.textContent = msg||""; els.connectStatus.className = kind||""; }
+  function saveEditorState(){ try{ localStorage.setItem(STATE_KEY, JSON.stringify({owner:gh.owner, repo:gh.repo, branch:gh.branch, path:gh.path, filePath:gh.filePath||null})); }catch(e){} }
+  function loadEditorState(){ try{ return JSON.parse(localStorage.getItem(STATE_KEY)) || {}; }catch(e){ return {}; } }
+  function draftKey(path){ return "codeEditor.draft::" + gh.owner + "/" + gh.repo + "/" + gh.branch + "/" + path; }
+  var pendingFile = null;
+
+  function activeBuffer(){ return buffers.find(function(b){ return b.id === activeId; }); }
+
+  // ---------------- Auth ----------------
+  els.showTokenBtn.addEventListener("click", function(){ els.tokenInput.type = els.tokenInput.type === "password" ? "text" : "password"; });
+  function connectWithToken(token){
+    setConnectStatus("Checking token…");
+    return fetch(API + "/user", { headers: { Authorization: "token " + token } })
+      .then(function(r){ if (!r.ok) throw new Error(r.status === 401 ? "Token rejected — check it's correct and has repo access." : "GitHub error " + r.status); return r.json(); })
+      .then(function(user){
+        gh.token = token;
+        try{ localStorage.setItem(TOKEN_KEY, token); }catch(e){}
+        setConnectStatus("Connected as " + user.login, "ok");
+        showScreen("app");
+        loadRepos();
+      })
+      .catch(function(err){
+        setConnectStatus(err.message, "err");
+        showScreen("connect");
+      });
+  }
+  els.connectBtn.addEventListener("click", function(){
+    var t = els.tokenInput.value.trim();
+    if (!t){ setConnectStatus("Paste a token first.", "err"); return; }
+    connectWithToken(t);
+  });
+  els.tokenInput.addEventListener("keydown", function(e){ if (e.key === "Enter") els.connectBtn.click(); });
+
+  // ---------------- Repo / branch / tree ----------------
+  var allRepos = [];
+  function loadRepos(){
+    setStatus("Loading repos…");
+    return fetch(API + "/user/repos?per_page=100&sort=updated", { headers: ghHeaders() })
+      .then(function(r){ return r.json(); })
+      .then(function(repos){
+        allRepos = repos;
+        renderRepoOptions(repos);
+        setStatus(repos.length + " repos", "ok");
+        var saved = loadEditorState();
+        if (saved.owner && saved.repo){
+          var full = saved.owner + "/" + saved.repo;
+          if (repos.some(function(r){return r.full_name===full;})){
+            els.repoSelect.value = full;
+            pendingFile = saved.filePath || null;
+            selectRepo(full, saved.branch, saved.path || "");
+          }
+        }
+        return repos;
+      })
+      .catch(function(err){ setStatus("Repo load failed", "err"); return []; });
+  }
+  function renderRepoOptions(repos){
+    els.repoSelect.innerHTML = '<option value="">Repo…</option>';
+    repos.forEach(function(r){
+      var opt = document.createElement("option"); opt.value = r.full_name; opt.textContent = r.full_name;
+      els.repoSelect.appendChild(opt);
+    });
+  }
+  els.repoSelect.addEventListener("change", function(){ if (els.repoSelect.value) selectRepo(els.repoSelect.value); });
+
+  function selectRepo(fullName, preferBranch, preferPath){
+    var parts = fullName.split("/");
+    gh.owner = parts[0]; gh.repo = parts[1]; gh.path = preferPath || "";
+    setStatus("Loading branches…");
+    fetch(API + "/repos/" + fullName + "/branches?per_page=100", { headers: ghHeaders() })
+      .then(function(r){ return r.json(); })
+      .then(function(branches){
+        els.branchSelect.innerHTML = "";
+        branches.forEach(function(b){ var o=document.createElement("option"); o.value=b.name; o.textContent=b.name; els.branchSelect.appendChild(o); });
+        var target = (preferBranch && branches.some(function(b){return b.name===preferBranch;})) ? preferBranch : (branches[0] && branches[0].name);
+        if (target){ els.branchSelect.value = target; gh.branch = target; }
+        saveEditorState();
+        loadFolder(gh.path);
+      })
+      .catch(function(){ setStatus("Branch load failed", "err"); });
+  }
+  els.branchSelect.addEventListener("change", function(){ gh.branch = els.branchSelect.value; gh.path=""; saveEditorState(); loadFolder(""); });
+
+  function renderBreadcrumb(){
+    var parts = gh.path ? gh.path.split("/") : [];
+    var html2 = '<span data-path="">' + (gh.repo||"repo") + "</span>";
+    var acc = "";
+    parts.forEach(function(p){ acc = acc ? acc+"/"+p : p; html2 += " / <span data-path=\""+acc+"\">"+p+"</span>"; });
+    els.breadcrumb.innerHTML = html2;
+    Array.prototype.slice.call(els.breadcrumb.querySelectorAll("span")).forEach(function(s){
+      s.addEventListener("click", function(){ gh.path = s.getAttribute("data-path"); saveEditorState(); loadFolder(gh.path); });
+    });
+  }
+
+  function renderFileTree(entries){
+    els.fileTree.innerHTML = "";
+    var filterText = els.fileFilter.value.trim().toLowerCase();
+    var filtered = filterText ? entries.filter(function(e){ return e.name.toLowerCase().indexOf(filterText) !== -1; }) : entries;
+    if (!filtered.length){
+      var empty = document.createElement("div");
+      empty.style.cssText = "color:var(--muted);font-size:12px;padding:10px;";
+      empty.textContent = filterText ? "No matches." : "This folder is empty.";
+      els.fileTree.appendChild(empty);
+      return;
+    }
+    filtered.forEach(function(entry){
+      var row = document.createElement("div");
+      row.className = "row-item";
+      row.innerHTML = '<span>' + (entry.type==="dir"?"📁":"📄") + '</span><span class="nm">' + entry.name + "</span>";
+      row.addEventListener("click", function(){
+        if (entry.type === "dir"){ gh.path = entry.path; saveEditorState(); loadFolder(gh.path); }
+        else openFileInEditor(entry.path, entry.sha);
+      });
+      if (entry.type !== "dir"){
+        var renBtn = document.createElement("button");
+        renBtn.className = "icon small"; renBtn.title = "Rename or move"; renBtn.textContent = "✏️";
+        renBtn.addEventListener("click", function(e){ e.stopPropagation(); renameFile(entry.path, entry.sha); });
+        row.appendChild(renBtn);
+
+        var delBtn = document.createElement("button");
+        delBtn.className = "icon small"; delBtn.title = "Delete this file from GitHub"; delBtn.textContent = "🗑";
+        delBtn.addEventListener("click", function(e){
+          e.stopPropagation();
+          if (!confirm("Delete " + entry.path + " from GitHub? This can't be undone from here — click OK only if you're sure.")) return;
+          setStatus("Deleting…");
+          deleteFileFromRepo(entry.path, entry.sha, "Delete " + entry.name + " via Modev Suite")
+            .then(function(){
+              setStatus("Deleted " + entry.name, "ok");
+              var buf = buffers.find(function(b){ return b.path === entry.path; });
+              if (buf) closeTab(buf.id, true);
+              loadFolder(gh.path);
+            })
+            .catch(function(err){ setStatus("Delete failed: " + err.message, "err"); });
+        });
+        row.appendChild(delBtn);
+      }
+      els.fileTree.appendChild(row);
+    });
+  }
+  els.fileFilter.addEventListener("input", function(){ renderFileTree(currentEntries); });
+
+  function loadFolder(path){
+    if (!gh.owner || !gh.repo || !gh.branch) return;
+    gh.path = path || "";
+    renderBreadcrumb();
+    els.fileFilter.value = "";
+    els.fileTree.innerHTML = "";
+    setStatus("Loading…");
+    var url = API + "/repos/" + gh.owner + "/" + gh.repo + "/contents/" + encodeApiPath(gh.path) + "?ref=" + encodeURIComponent(gh.branch);
+    fetch(url, { headers: ghHeaders() })
+      .then(function(r){ if (!r.ok) throw new Error("GitHub error " + r.status); return r.json(); })
+      .then(function(entries){
+        if (!Array.isArray(entries)) entries = [];
+        entries.sort(function(a,b){ if (a.type!==b.type) return a.type==="dir"?-1:1; return a.name.localeCompare(b.name); });
+        currentEntries = entries;
+        renderFileTree(entries);
+        setStatus("Ready", "ok");
+        closeDrawer();
+        if (pendingFile){ var pf = pendingFile; pendingFile = null; openFileInEditor(pf); }
+      })
+      .catch(function(err){ setStatus(err.message, "err"); });
+  }
+
+  // ---------------- Base64 / GitHub write helpers ----------------
+  function b64Decode(b64){
+    var binary = atob(b64.replace(/\n/g, ""));
+    var bytes = Uint8Array.from(binary, function(c){ return c.charCodeAt(0); });
+    return new TextDecoder("utf-8").decode(bytes);
+  }
+  function b64Encode(str){
+    var bytes = new TextEncoder().encode(str);
+    var binary = "";
+    bytes.forEach(function(b){ binary += String.fromCharCode(b); });
+    return btoa(binary);
+  }
+  function putRaw(path, base64Content, message, sha){
+    var body = { message: message, content: base64Content, branch: gh.branch };
+    if (sha) body.sha = sha;
+    return fetch(API + "/repos/" + gh.owner + "/" + gh.repo + "/contents/" + encodeApiPath(path), {
+      method: "PUT",
+      headers: Object.assign({ "Content-Type": "application/json" }, ghHeaders()),
+      body: JSON.stringify(body)
+    }).then(function(res){
+      if (!res.ok) return res.json().then(function(d){ throw new Error(d.message || ("GitHub error " + res.status)); });
+      return res.json();
+    });
+  }
+  function deleteFileFromRepo(path, sha, message){
+    return fetch(API + "/repos/" + gh.owner + "/" + gh.repo + "/contents/" + encodeApiPath(path), {
+      method: "DELETE",
+      headers: Object.assign({ "Content-Type": "application/json" }, ghHeaders()),
+      body: JSON.stringify({ message: message, sha: sha, branch: gh.branch })
+    }).then(function(res){
+      if (!res.ok) return res.json().then(function(d){ throw new Error(d.message || ("GitHub error " + res.status)); });
+      return res.json();
+    });
+  }
+
+  function renameFile(oldPath, oldSha){
+    var newPath = prompt("Rename/move to:", oldPath);
+    if (!newPath || newPath === oldPath) return;
+    newPath = newPath.replace(/^\/+/, "");
+    setStatus("Renaming…");
+    var url = API + "/repos/" + gh.owner + "/" + gh.repo + "/contents/" + encodeApiPath(oldPath) + "?ref=" + encodeURIComponent(gh.branch);
+    fetch(url, { headers: ghHeaders() })
+      .then(function(r){ if (!r.ok) throw new Error("Couldn't read the original file"); return r.json(); })
+      .then(function(data){
+        return putRaw(newPath, data.content.replace(/\n/g,""), "Rename " + oldPath + " to " + newPath + " via Modev Suite")
+          .then(function(){ return deleteFileFromRepo(oldPath, oldSha, "Remove old path " + oldPath + " (renamed) via Modev Suite"); });
+      })
+      .then(function(){
+        setStatus("Renamed to " + newPath, "ok");
+        var buf = buffers.find(function(b){ return b.path === oldPath; });
+        if (buf){ buf.path = newPath; buf.ext = extOf(newPath); if (buf.id === activeId){ els.fileLabel.textContent = newPath; } renderTabs(); }
+        loadFolder(gh.path);
+      })
+      .catch(function(err){ setStatus("Rename failed: " + err.message, "err"); });
+  }
+
+  // ---------------- Language detection ----------------
+  function extOf(path){ var m = /\.([a-z0-9]+)$/i.exec(path); return m ? m[1].toLowerCase() : ""; }
+  function langExtensionFor(ext){
+    if (ext === "html" || ext === "htm") return html();
+    if (ext === "css") return css();
+    if (ext === "js" || ext === "mjs" || ext === "jsx") return javascript({ jsx: ext === "jsx" });
+    if (ext === "ts" || ext === "tsx") return javascript({ jsx: ext === "tsx", typescript: true });
+    if (ext === "json") return json();
+    if (ext === "md" || ext === "markdown") return markdown();
+    return null;
+  }
+  function prettierConfigFor(ext){
+    if (ext === "html" || ext === "htm") return { parser: "html", plugins: [prettierHtml, prettierPostcss, prettierBabel, prettierEstree] };
+    if (ext === "css" || ext === "scss" || ext === "less") return { parser: "css", plugins: [prettierPostcss] };
+    if (ext === "js" || ext === "mjs" || ext === "jsx" || ext === "ts" || ext === "tsx") return { parser: "babel", plugins: [prettierBabel, prettierEstree] };
+    if (ext === "json") return { parser: "json", plugins: [prettierBabel, prettierEstree] };
+    if (ext === "md" || ext === "markdown") return { parser: "markdown", plugins: [prettierMarkdown] };
+    return null;
+  }
+
+  // ---------------- Tabs / buffers ----------------
+  function extensionsFor(buf){
+    var exts = [basicSetup, oneDark, indentUnit.of("  "), EditorView.lineWrapping,
+      autocompletion({ tooltipClass: function(){ return "cm-suggest-top"; }, activateOnTyping: true }),
+      EditorView.updateListener.of(function(u){
+        if (!u.docChanged) return;
+        buf.dirty = true;
+        els.fileLabel.classList.toggle("dirty", buf.id === activeId);
+        renderTabs();
+        if (buf.id === activeId) schedulePreviewRefresh();
+        clearTimeout(buf.draftTimer);
+        buf.draftTimer = setTimeout(function(){
+          try{ localStorage.setItem(draftKey(buf.path), u.state.doc.toString()); }catch(e){}
+        }, 600);
+      })];
+    var lang = langExtensionFor(buf.ext);
+    if (lang) exts.push(lang);
+    return exts;
+  }
+
+  function renderTabs(){
+    els.tabsBar.innerHTML = "";
+    buffers.forEach(function(buf){
+      var chip = document.createElement("div");
+      chip.className = "tab-chip" + (buf.id === activeId ? " active" : "");
+      var name = buf.path.split("/").pop();
+      chip.innerHTML = (buf.dirty ? '<span class="dot"></span>' : '') + '<span>' + name + (buf.isNew ? " (new)" : "") + '</span>';
+      var x = document.createElement("span");
+      x.className = "x"; x.textContent = "✕";
+      x.addEventListener("click", function(e){ e.stopPropagation(); closeTab(buf.id); });
+      chip.appendChild(x);
+      chip.addEventListener("click", function(){ if (buf.id !== activeId) switchToBuffer(buf.id); });
+      els.tabsBar.appendChild(chip);
+    });
+  }
+
+  function switchToBuffer(id){
+    var buf = buffers.find(function(b){ return b.id === id; });
+    if (!buf) return;
+    if (activeId != null && view){
+      var prev = buffers.find(function(b){ return b.id === activeId; });
+      if (prev) prev.state = view.state;
+    }
+    activeId = id;
+    if (!view){
+      els.editorHost.innerHTML = "";
+      view = new EditorView({ state: buf.state, parent: els.editorHost });
+    } else {
+      view.setState(buf.state);
+    }
+    els.fileLabel.textContent = buf.path + (buf.isNew ? " (not on GitHub yet)" : "");
+    els.fileLabel.classList.toggle("dirty", !!buf.dirty);
+    gh.filePath = buf.path;
+    saveEditorState();
+    renderTabs();
+    if (previewOpen) refreshPreview();
+  }
+
+  function closeTab(id, skipConfirm){
+    var buf = buffers.find(function(b){ return b.id === id; });
+    if (!buf) return;
+    if (id === activeId && view) buf.state = view.state;
+    if (buf.dirty && !skipConfirm && !confirm("Close " + buf.path + "? Your draft stays saved locally and will be offered again next time you open it.")) return;
+    buffers = buffers.filter(function(b){ return b.id !== id; });
+    if (activeId === id){
+      activeId = null;
+      if (buffers.length){
+        switchToBuffer(buffers[buffers.length - 1].id);
+      } else {
+        if (view){ view.destroy(); view = null; }
+        els.editorHost.innerHTML = "";
+        els.editorHost.appendChild(els.emptyEditor);
+        els.fileLabel.textContent = "No file open";
+        els.fileLabel.classList.remove("dirty");
+        gh.filePath = null;
+        saveEditorState();
+      }
+    }
+    renderTabs();
+  }
+
+  function openFileInEditor(path){
+    var existing = buffers.find(function(b){ return b.path === path; });
+    if (existing){ switchToBuffer(existing.id); closeDrawer(); return; }
+    setStatus("Opening " + path + "…");
+    var url = API + "/repos/" + gh.owner + "/" + gh.repo + "/contents/" + encodeApiPath(path) + "?ref=" + encodeURIComponent(gh.branch);
+    fetch(url, { headers: ghHeaders() })
+      .then(function(r){ if (!r.ok) throw new Error("Couldn't load file (" + r.status + ")"); return r.json(); })
+      .then(function(data){
+        var remoteContent = data.encoding === "base64" ? b64Decode(data.content) : data.content;
+        var ext = extOf(path);
+        var draft = null;
+        try{ draft = localStorage.getItem(draftKey(path)); }catch(e){}
+        var hasDraft = draft !== null && draft !== remoteContent;
+        var buf = { id: bufIdSeq++, path: path, ext: ext, sha: data.sha, isNew: false, dirty: hasDraft, draftTimer: null };
+        buf.state = EditorState.create({ doc: hasDraft ? draft : remoteContent, extensions: extensionsFor(buf) });
+        buffers.push(buf);
+        switchToBuffer(buf.id);
+        setStatus(hasDraft ? "Restored an unsaved draft — tap Save to commit it" : "Loaded", "ok");
+        closeDrawer();
+      })
+      .catch(function(err){ setStatus(err.message, "err"); });
+  }
+
+  els.newFileBtn.addEventListener("click", function(){
+    var name = prompt("New file path, relative to /" + (gh.path || "") + ":", "");
+    if (!name) return;
+    var fullPath = (gh.path ? gh.path + "/" : "") + name.replace(/^\/+/, "");
+    var existing = buffers.find(function(b){ return b.path === fullPath; });
+    if (existing){ switchToBuffer(existing.id); closeDrawer(); return; }
+    var buf = { id: bufIdSeq++, path: fullPath, ext: extOf(fullPath), sha: null, isNew: true, dirty: true, draftTimer: null };
+    buf.state = EditorState.create({ doc: "", extensions: extensionsFor(buf) });
+    buffers.push(buf);
+    switchToBuffer(buf.id);
+    setStatus("New file — tap Save to create it on GitHub", "ok");
+    closeDrawer();
+  });
+  els.newFolderBtn.addEventListener("click", function(){
+    var name = prompt("New folder name, inside /" + (gh.path || "") + ":", "");
+    if (!name) return;
+    var folder = (gh.path ? gh.path + "/" : "") + name.replace(/^\/+|\/+$/g, "");
+    var fullPath = folder + "/.gitkeep";
+    var existing = buffers.find(function(b){ return b.path === fullPath; });
+    if (existing){ switchToBuffer(existing.id); closeDrawer(); return; }
+    var buf = { id: bufIdSeq++, path: fullPath, ext: "", sha: null, isNew: true, dirty: true, draftTimer: null };
+    buf.state = EditorState.create({ doc: "", extensions: extensionsFor(buf) });
+    buffers.push(buf);
+    switchToBuffer(buf.id);
+    setStatus("New folder staged as " + fullPath + " — tap Save to create it", "ok");
+    closeDrawer();
+  });
+
+  // ---------------- Save (with conflict check) ----------------
+  els.saveBtn.addEventListener("click", function(){
+    var buf = activeBuffer();
+    if (!buf || !view){ setStatus("No file open", "err"); return; }
+    buf.state = view.state;
+    var content = buf.state.doc.toString();
+    setStatus("Saving…");
+
+    function finishSave(sha){
+      return putRaw(buf.path, b64Encode(content), (buf.isNew ? "Add " : "Edit ") + buf.path + " via Modev Suite", sha)
+        .then(function(data){
+          buf.sha = data.content.sha; buf.isNew = false; buf.dirty = false;
+          try{ localStorage.removeItem(draftKey(buf.path)); }catch(e){}
+          els.fileLabel.classList.remove("dirty");
+          els.fileLabel.textContent = buf.path;
+          renderTabs();
+          setStatus("Saved ✓", "ok");
+        });
+    }
+
+    if (buf.isNew){
+      finishSave(null).catch(function(err){ setStatus("Save failed: " + err.message, "err"); });
+      return;
+    }
+    var url = API + "/repos/" + gh.owner + "/" + gh.repo + "/contents/" + encodeApiPath(buf.path) + "?ref=" + encodeURIComponent(gh.branch);
+    fetch(url, { headers: ghHeaders() })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(remote){
+        if (remote && remote.sha !== buf.sha){
+          if (!confirm("This file changed on GitHub since you opened it. Overwrite the remote version with yours anyway?")){
+            setStatus("Save cancelled", "");
+            return;
+          }
+          return finishSave(remote.sha);
+        }
+        return finishSave(buf.sha);
+      })
+      .catch(function(err){ setStatus("Save failed: " + err.message, "err"); });
+  });
+
+  els.formatBtn.addEventListener("click", function(){
+    var buf = activeBuffer();
+    if (!buf || !view) return;
+    var cfg = prettierConfigFor(buf.ext);
+    if (!cfg){ setStatus("No formatter for ." + buf.ext, "err"); return; }
+    setStatus("Formatting…");
+    prettier.format(view.state.doc.toString(), cfg)
+      .then(function(out){
+        view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: out } });
+        setStatus("Formatted ✓", "ok");
+      })
+      .catch(function(err){ console.error("Prettier failed: " + err.message); setStatus("Format error: " + err.message.split("\n")[0], "err"); });
+  });
+
+  els.findBtn.addEventListener("click", function(){ if (view) openSearchPanel(view); });
+
+  els.emmetBtn.addEventListener("click", function(){
+    if (!view) return;
+    var buf = activeBuffer();
+    var pos = view.state.selection.main.head;
+    var line = view.state.doc.lineAt(pos);
+    var textBefore = line.text.slice(0, pos - line.from);
+    var m = /([a-zA-Z0-9.#>*+^$@\[\]()="':_-]+)$/.exec(textBefore);
+    if (!m){ setStatus("Cursor isn't after an abbreviation", "err"); return; }
+    var abbr = m[1];
+    var syntax = (buf && buf.ext === "css") ? "css" : "html";
+    try{
+      var expanded = expandEmmet(abbr, { syntax: syntax });
+      var from = pos - abbr.length;
+      view.dispatch({ changes: { from: from, to: pos, insert: expanded }, selection: { anchor: from + expanded.length } });
+      view.focus();
+    }catch(err){ setStatus("Emmet couldn't expand that", "err"); }
+  });
+
+  els.undoBtn.addEventListener("click", function(){ if (view) undo(view); });
+  els.redoBtn.addEventListener("click", function(){ if (view) redo(view); });
+
+  Array.prototype.slice.call(els.quickbar.querySelectorAll("button[data-ins]")).forEach(function(btn){
+    btn.addEventListener("click", function(){
+      if (!view) return;
+      var ch = btn.getAttribute("data-ins");
+      var pos = view.state.selection.main.head;
+      view.dispatch({ changes: { from: pos, insert: ch }, selection: { anchor: pos + ch.length } });
+      view.focus();
+    });
+  });
+
+  els.fontUp.addEventListener("click", function(){ fontSize = Math.min(24, fontSize+1); applyFont(); });
+  els.fontDown.addEventListener("click", function(){ fontSize = Math.max(10, fontSize-1); applyFont(); });
+  function applyFont(){ document.documentElement.style.setProperty("--editor-fs", fontSize+"px"); try{ localStorage.setItem(FONT_KEY, String(fontSize)); }catch(e){} }
+
+  function openDrawer(){ els.fileDrawer.classList.add("open"); els.fileDrawerBackdrop.classList.add("open"); }
+  function closeDrawer(){ if (window.innerWidth <= 760){ els.fileDrawer.classList.remove("open"); els.fileDrawerBackdrop.classList.remove("open"); } }
+  els.drawerToggle.addEventListener("click", function(){
+    els.fileDrawer.classList.contains("open") ? closeDrawer() : openDrawer();
+  });
+  els.fileDrawerBackdrop.addEventListener("click", closeDrawer);
+
+  // ---------------- More drawer ----------------
+  function openMore(){ els.moreDrawer.classList.add("open"); els.moreBackdrop.classList.add("open"); }
+  function closeMore(){ els.moreDrawer.classList.remove("open"); els.moreBackdrop.classList.remove("open"); }
+  els.moreBtn.addEventListener("click", openMore);
+  els.moreClose.addEventListener("click", closeMore);
+  els.moreBackdrop.addEventListener("click", closeMore);
+
+  els.newRepoBtn.addEventListener("click", function(){
+    var name = prompt("New repo name:", "");
+    if (!name) return;
+    var isPrivate = confirm("Make it private? OK = private, Cancel = public");
+    setStatus("Creating repo…");
+    fetch(API + "/user/repos", {
+      method: "POST",
+      headers: Object.assign({ "Content-Type": "application/json" }, ghHeaders()),
+      body: JSON.stringify({ name: name, private: isPrivate, auto_init: true })
+    })
+      .then(function(res){ if (!res.ok) return res.json().then(function(d){ throw new Error(d.message || ("GitHub error " + res.status)); }); return res.json(); })
+      .then(function(repo){
+        setStatus("Repo \"" + repo.name + "\" created", "ok");
+        closeMore();
+        return loadRepos().then(function(){ els.repoSelect.value = repo.full_name; selectRepo(repo.full_name); });
+      })
+      .catch(function(err){ setStatus("Repo creation failed: " + err.message, "err"); });
+  });
+
+  // ------------------------------------------------------------------
+  // Live preview + attached console — NOT a system terminal. It's a
+  // sandboxed iframe rendering the file you're editing (HTML with its
+  // linked <link>/<script> files inlined from the same repo folder, or
+  // Markdown/images/video/PDF rendered directly), framed at a chosen
+  // device size so you can check responsiveness — using the same size
+  // presets as the Device Lab tab. Below it: a console showing that
+  // preview's logs/errors, plus a small JS REPL. No shell, no
+  // filesystem, no npm — that needs a real backend, which a local file
+  // can't provide.
+  // ------------------------------------------------------------------
+  var PREVIEW_DEVICES = [
+    { name: "Fit panel", w: 0, h: 0 },
+    { name: "iPhone SE", w: 375, h: 667 },
+    { name: "iPhone 14", w: 390, h: 844 },
+    { name: "iPhone 14 Pro Max", w: 430, h: 932 },
+    { name: "iPhone 17", w: 402, h: 874 },
+    { name: "Pixel 7", w: 412, h: 915 },
+    { name: "iPad Mini", w: 768, h: 1024 },
+    { name: "iPad Pro 11\"", w: 834, h: 1194 },
+    { name: "Laptop", w: 1366, h: 768 },
+    { name: "Desktop 1080p", w: 1920, h: 1080 }
+  ];
+  PREVIEW_DEVICES.forEach(function(d, i){
+    var opt = document.createElement("option");
+    opt.value = i; opt.textContent = d.name + (d.w ? " (" + d.w + "×" + d.h + ")" : "");
+    els.previewDeviceSelect.appendChild(opt);
+  });
+  var PREVIEW_DEVICE_KEY = "codeEditor.previewDevice";
+  els.previewDeviceSelect.value = localStorage.getItem(PREVIEW_DEVICE_KEY) || 0;
+
+  var IMAGE_EXT = /^(png|jpe?g|gif|webp|svg|ico|bmp)$/i;
+  var VIDEO_EXT = /^(mp4|webm|mov|ogg)$/i;
+  var MIME_BY_EXT = { png:"image/png", jpg:"image/jpeg", jpeg:"image/jpeg", gif:"image/gif", webp:"image/webp",
+    svg:"image/svg+xml", ico:"image/x-icon", bmp:"image/bmp", mp4:"video/mp4", webm:"video/webm", mov:"video/quicktime",
+    pdf:"application/pdf" };
+
+  var previewOpen = false;
+  var previewDebounce = null;
+  var consoleOpen = false;
+  var unseenConsole = 0;
+
+  function applyPreviewFrameSize(){
+    var idx = parseInt(els.previewDeviceSelect.value, 10) || 0;
+    var d = PREVIEW_DEVICES[idx];
+    localStorage.setItem(PREVIEW_DEVICE_KEY, String(idx));
+    if (!d.w){
+      els.previewFrameHolder.classList.add("full");
+      els.previewFrame.style.width = "100%"; els.previewFrame.style.height = "100%"; els.previewFrame.style.transform = "";
+      els.previewImg.style.transform = ""; els.previewVideo.style.transform = "";
+      return;
+    }
+    els.previewFrameHolder.classList.remove("full");
+    var availW = els.previewStage.clientWidth - 32, availH = els.previewStage.clientHeight - 32;
+    var scale = Math.min(1, availW / d.w, availH / d.h);
+    els.previewFrame.style.width = d.w + "px"; els.previewFrame.style.height = d.h + "px";
+    els.previewFrame.style.transform = "scale(" + scale + ")"; els.previewFrame.style.transformOrigin = "top left";
+    els.previewFrameHolder.style.width = (d.w * scale) + "px"; els.previewFrameHolder.style.height = (d.h * scale) + "px";
+  }
+  els.previewDeviceSelect.addEventListener("change", applyPreviewFrameSize);
+  window.addEventListener("resize", function(){ if (previewOpen) applyPreviewFrameSize(); });
+
+  function resolveRelative(basePath, rel){
+    if (/^https?:\/\//i.test(rel) || rel.indexOf("//") === 0) return null; // leave external URLs alone
+    if (rel.charAt(0) === "/") return rel.slice(1).split("/").filter(Boolean).join("/"); // repo-root-relative
+    var baseDir = basePath.split("/").slice(0, -1);
+    rel.split("/").forEach(function(seg){
+      if (seg === "." || seg === "") return;
+      if (seg === "..") baseDir.pop(); else baseDir.push(seg);
+    });
+    return baseDir.join("/");
+  }
+
+  function fetchTextForPreview(path){
+    // Prefer an already-open, possibly-unsaved buffer over the committed GitHub copy.
+    var buf = buffers.find(function(b){ return b.path === path; });
+    if (buf) return Promise.resolve(buf.id === activeId && view ? view.state.doc.toString() : buf.state.doc.toString());
+    var url = API + "/repos/" + gh.owner + "/" + gh.repo + "/contents/" + encodeApiPath(path) + "?ref=" + encodeURIComponent(gh.branch);
+    return fetch(url, { headers: ghHeaders() }).then(function(r){ if (!r.ok) throw new Error("404"); return r.json(); })
+      .then(function(d){ return b64Decode(d.content); });
+  }
+  function fetchRawBase64(path){
+    var url = API + "/repos/" + gh.owner + "/" + gh.repo + "/contents/" + encodeApiPath(path) + "?ref=" + encodeURIComponent(gh.branch);
+    return fetch(url, { headers: ghHeaders() }).then(function(r){ if (!r.ok) throw new Error("Couldn't load file (" + r.status + ")"); return r.json(); })
+      .then(function(d){ return d.content.replace(/\n/g, ""); });
+  }
+
+  var CONSOLE_BRIDGE = '<script>(function(){' +
+    'function post(level,args){try{parent.postMessage({__preview:true,level:level,text:Array.prototype.map.call(args,function(a){try{return typeof a==="string"?a:JSON.stringify(a);}catch(e){return String(a);}}).join(" ")},"*");}catch(e){}}' +
+    '["log","warn","error","info"].forEach(function(l){var o=console[l]?console[l].bind(console):function(){};console[l]=function(){post(l,arguments);o.apply(console,arguments);};});' +
+    'window.addEventListener("error",function(e){post("error",[e.message+" ("+e.lineno+":"+e.colno+")"]);});' +
+    'window.addEventListener("unhandledrejection",function(e){post("error",["Unhandled rejection: "+(e.reason&&e.reason.message||e.reason)]);});' +
+    '})();<' + '/script>';
+
+  function buildPreviewHtml(buf){
+    var html2 = buf.state.doc.toString();
+    var fetches = [];
+    html2 = html2.replace(/<link[^>]+rel=["']stylesheet["'][^>]*href=["']([^"']+)["'][^>]*>/gi, function(m, href){
+      var resolved = resolveRelative(buf.path, href);
+      if (!resolved) return m;
+      var idx = fetches.length;
+      fetches.push(fetchTextForPreview(resolved).then(function(css){ return "<style>" + css + "</style>"; }).catch(function(){ return "<!-- couldn't load " + href + " -->"; }));
+      return "@@INLINE" + idx + "@@";
+    });
+    html2 = html2.replace(/<script[^>]+src=["']([^"']+)["'][^>]*><\/script>/gi, function(m, src){
+      var resolved = resolveRelative(buf.path, src);
+      if (!resolved) return m;
+      var idx = fetches.length;
+      fetches.push(fetchTextForPreview(resolved).then(function(js){ return "<script>" + js + "<" + "/script>"; }).catch(function(){ return "<!-- couldn't load " + src + " -->"; }));
+      return "@@INLINE" + idx + "@@";
+    });
+    return Promise.all(fetches).then(function(parts){
+      parts.forEach(function(part, i){ html2 = html2.replace("@@INLINE" + i + "@@", part); });
+      if (/<head[^>]*>/i.test(html2)) html2 = html2.replace(/<head([^>]*)>/i, "<head$1>" + CONSOLE_BRIDGE);
+      else html2 = CONSOLE_BRIDGE + html2;
+      return html2;
+    });
+  }
+
+  function buildMarkdownHtml(text){
+    return import("https://esm.sh/marked@18.0.13").then(function(mod){
+      var body = mod.marked.parse(text);
+      return "<!DOCTYPE html><html><head><meta charset='utf-8'>" + CONSOLE_BRIDGE +
+        "<style>body{font-family:-apple-system,sans-serif;max-width:720px;margin:24px auto;padding:0 16px;line-height:1.6;color:#222;}" +
+        "pre{background:#f4f4f4;padding:10px;border-radius:6px;overflow:auto;} code{background:#f4f4f4;padding:1px 4px;border-radius:3px;}" +
+        "img{max-width:100%;} blockquote{border-left:3px solid #ccc;margin:0;padding-left:12px;color:#666;}</style></head>" +
+        "<body>" + body + "</body></html>";
+    });
+  }
+
+  function showFrame(which){
+    els.previewFrame.style.display = which === "frame" ? "block" : "none";
+    els.previewImg.style.display = which === "img" ? "block" : "none";
+    els.previewVideo.style.display = which === "video" ? "block" : "none";
+    if (which !== "video"){ els.previewVideo.pause && els.previewVideo.pause(); els.previewVideo.removeAttribute("src"); }
+  }
+
+  function refreshPreview(){
+    var buf = activeBuffer();
+    if (!buf) return;
+    if (buf.id === activeId && view) buf.state = view.state;
+    els.previewTitle.textContent = "Preview — " + buf.path;
+    var ext = (buf.ext || "").toLowerCase();
+
+    if (ext === "html" || ext === "htm"){
+      showFrame("frame");
+      buildPreviewHtml(buf).then(function(html2){ els.previewFrame.srcdoc = html2; applyPreviewFrameSize(); });
+      return;
+    }
+    if (ext === "md" || ext === "markdown"){
+      showFrame("frame");
+      buildMarkdownHtml(buf.state.doc.toString()).then(function(html2){ els.previewFrame.srcdoc = html2; applyPreviewFrameSize(); });
+      return;
+    }
+    if (IMAGE_EXT.test(ext)){
+      showFrame("img");
+      var mime = MIME_BY_EXT[ext] || "image/*";
+      fetchRawBase64(buf.path).then(function(b64){ els.previewImg.src = "data:" + mime + ";base64," + b64; els.previewFrameHolder.classList.add("full"); })
+        .catch(function(err){ setStatus("Preview failed: " + err.message, "err"); });
+      return;
+    }
+    if (VIDEO_EXT.test(ext)){
+      showFrame("video");
+      var vmime = MIME_BY_EXT[ext] || "video/mp4";
+      fetchRawBase64(buf.path).then(function(b64){ els.previewVideo.src = "data:" + vmime + ";base64," + b64; els.previewFrameHolder.classList.add("full"); })
+        .catch(function(err){ setStatus("Preview failed: " + err.message, "err"); });
+      return;
+    }
+    if (ext === "pdf"){
+      showFrame("frame");
+      fetchRawBase64(buf.path).then(function(b64){
+        els.previewFrame.removeAttribute("srcdoc");
+        els.previewFrame.src = "data:application/pdf;base64," + b64;
+        els.previewFrameHolder.classList.add("full");
+      }).catch(function(err){ setStatus("Preview failed: " + err.message, "err"); });
+      return;
+    }
+    showFrame("frame");
+    els.previewFrame.srcdoc = "<body style='font-family:sans-serif;color:#888;padding:20px;'>No live preview for ." + (ext || "this file type") + " yet — HTML, Markdown, images, video, and PDF are supported.</body>";
+    els.previewFrameHolder.classList.add("full");
+  }
+
+  function openPreview(){
+    previewOpen = true;
+    els.previewPane.classList.add("open");
+    refreshPreview();
+  }
+  function closePreview(){ previewOpen = false; els.previewPane.classList.remove("open"); }
+  els.previewBtn.addEventListener("click", function(){ previewOpen ? closePreview() : openPreview(); });
+  els.previewCloseBtn.addEventListener("click", closePreview);
+  els.previewRefresh.addEventListener("click", refreshPreview);
+
+  function schedulePreviewRefresh(){
+    if (!previewOpen) return;
+    clearTimeout(previewDebounce);
+    previewDebounce = setTimeout(refreshPreview, 700);
+  }
+
+  // ---------------- Collapsible console (hidden behind the floating ⌘ button) ----------------
+  function openConsole(){ consoleOpen = true; els.consoleWrap.classList.add("open"); unseenConsole = 0; els.consoleBadge.classList.remove("show"); }
+  function closeConsole(){ consoleOpen = false; els.consoleWrap.classList.remove("open"); }
+  els.consoleToggle.addEventListener("click", function(){ consoleOpen ? closeConsole() : openConsole(); });
+  els.consoleHideBtn.addEventListener("click", closeConsole);
+
+  function logToConsole(level, text){
+    var log = els.consoleLog;
+    var line = document.createElement("div");
+    line.className = "plog " + (level || "");
+    line.textContent = text;
+    log.appendChild(line);
+    log.scrollTop = log.scrollHeight;
+    if (!consoleOpen){
+      unseenConsole++;
+      els.consoleBadge.textContent = unseenConsole > 9 ? "9+" : String(unseenConsole);
+      els.consoleBadge.classList.add("show");
+    }
+  }
+  window.addEventListener("message", function(e){
+    if (e.data && e.data.__preview) logToConsole(e.data.level, e.data.text);
+  });
+  els.consoleClearBtn.addEventListener("click", function(){ els.consoleLog.innerHTML = ""; });
+  els.replRun.addEventListener("click", runRepl);
+  els.replInput.addEventListener("keydown", function(e){ if (e.key === "Enter") runRepl(); });
+  function runRepl(){
+    var code = els.replInput.value.trim();
+    if (!code) return;
+    logToConsole("", "> " + code);
+    try{
+      var win = els.previewFrame.contentWindow;
+      var result = win.eval(code);
+      logToConsole("result", typeof result === "undefined" ? "undefined" : (function(){ try{ return JSON.stringify(result); }catch(e){ return String(result); } })());
+    }catch(err){
+      logToConsole("error", err.message);
+    }
+    els.replInput.value = "";
+  }
+
+  window.addEventListener("beforeunload", function(e){
+    if (buffers.some(function(b){ return b.dirty; })){ e.preventDefault(); e.returnValue = ""; }
+  });
+
+  // ---------------- Boot ----------------
+  var savedToken = null;
+  try{ savedToken = localStorage.getItem(TOKEN_KEY); }catch(e){}
+  if (savedToken){
+    showScreen("loading");
+    connectWithToken(savedToken);
+  } else {
+    showScreen("connect");
+  }
+</script>
+
+</body>
+</html>
