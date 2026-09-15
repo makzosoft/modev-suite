@@ -94,6 +94,20 @@
   </div>
 
   <div class="card">
+    <h3>▲ Vercel token</h3>
+    <p id="vercelStatus">Checking…</p>
+    <div class="row">
+      <input id="vercelTokenInput" type="password" placeholder="Paste a new token to replace it">
+      <button id="showVercelToken" title="Show/hide">👁</button>
+    </div>
+    <div class="row">
+      <button id="saveVercelToken" class="primary">Save token</button>
+      <button id="clearVercelToken" class="danger">Disconnect</button>
+    </div>
+    <p style="margin-top:8px;">Used for one-tap deploys from the GitHub tab's ⋯ More menu. Get a token at vercel.com → Settings → Tokens.</p>
+  </div>
+
+  <div class="card">
     <h3>💾 Local storage used by this suite</h3>
     <div id="storageStats"></div>
     <div class="row" style="margin-top:12px;">
@@ -120,8 +134,11 @@
 (function(){
   "use strict";
   var TOKEN_KEY = "ghUploader.token";
+  var VERCEL_TOKEN_KEY = "vercelUploader.token";
   var els = {};
-  ["tokenInput","showToken","saveToken","clearToken","tokenStatus","storageStats","clearDrafts","clearHistory","saveMsg"]
+  ["tokenInput","showToken","saveToken","clearToken","tokenStatus",
+   "vercelTokenInput","showVercelToken","saveVercelToken","clearVercelToken","vercelStatus",
+   "storageStats","clearDrafts","clearHistory","saveMsg"]
     .forEach(function(id){ els[id] = document.getElementById(id); });
 
   function refreshTokenStatus(){
@@ -148,9 +165,36 @@
     refreshTokenStatus();
   });
 
+  function refreshVercelStatus(){
+    var t = null;
+    try{ t = localStorage.getItem(VERCEL_TOKEN_KEY); }catch(e){}
+    if (!t){ els.vercelStatus.textContent = "Not connected."; els.vercelStatus.className = ""; return; }
+    els.vercelStatus.textContent = "Checking saved token…";
+    fetch("https://api.vercel.com/v2/user", { headers: { Authorization: "Bearer " + t } })
+      .then(function(r){ return r.ok ? r.json() : Promise.reject(new Error("Token rejected")); })
+      .then(function(d){
+        var name = (d.user && (d.user.username || d.user.name || d.user.email)) || "your account";
+        els.vercelStatus.textContent = "Connected as " + name; els.vercelStatus.className = "ok";
+      })
+      .catch(function(){ els.vercelStatus.textContent = "Saved token is invalid or expired."; els.vercelStatus.className = "err"; });
+  }
+  els.showVercelToken.addEventListener("click", function(){ els.vercelTokenInput.type = els.vercelTokenInput.type === "password" ? "text" : "password"; });
+  els.saveVercelToken.addEventListener("click", function(){
+    var t = els.vercelTokenInput.value.trim();
+    if (!t) return;
+    try{ localStorage.setItem(VERCEL_TOKEN_KEY, t); }catch(e){}
+    els.vercelTokenInput.value = "";
+    refreshVercelStatus();
+  });
+  els.clearVercelToken.addEventListener("click", function(){
+    if (!confirm("Disconnect Vercel? You'll need to paste a token again to deploy from the GitHub tab.")) return;
+    try{ localStorage.removeItem(VERCEL_TOKEN_KEY); }catch(e){}
+    refreshVercelStatus();
+  });
+
   function humanBytes(n){ return n < 1024 ? n + " B" : (n/1024).toFixed(1) + " KB"; }
   function refreshStorage(){
-    var groups = { "Device Lab": 0, "GitHub tool": 0, "Code Editor drafts": 0, "Code Editor state": 0, "Other": 0 };
+    var groups = { "Device Lab": 0, "GitHub tool": 0, "Vercel": 0, "Code Editor drafts": 0, "Code Editor state": 0, "Other": 0 };
     var total = 0;
     try{
       for (var i = 0; i < localStorage.length; i++){
@@ -159,6 +203,7 @@
         total += size;
         if (key.indexOf("deviceLab.") === 0) groups["Device Lab"] += size;
         else if (key.indexOf("ghUploader.") === 0) groups["GitHub tool"] += size;
+        else if (key.indexOf("vercelUploader.") === 0) groups["Vercel"] += size;
         else if (key.indexOf("codeEditor.draft::") === 0) groups["Code Editor drafts"] += size;
         else if (key.indexOf("codeEditor.") === 0) groups["Code Editor state"] += size;
         else groups["Other"] += size;
@@ -197,6 +242,7 @@
   });
 
   refreshTokenStatus();
+  refreshVercelStatus();
   refreshStorage();
 })();
 </script>
