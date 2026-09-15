@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Settings</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
+<style>
+  :root{
+    --bg:#0a0e27; --panel:#12163a; --panel-2:#181c44; --border:#2c3168;
+    --text:#e7e9ee; --muted:#9aa0b0; --accent:#7c3aed; --accent-grad:linear-gradient(135deg,#6826fc,#d727f1); --accent-2:#5b21b6;
+    --good:#5bd18a; --bad:#ff8080;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-size:14px;}
+  button,input{font-family:inherit;}
+  input,button{background:var(--panel-2); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:8px 10px; font-size:13px;}
+  button{cursor:pointer;}
+  button:active{transform:scale(.95);}
+  button.primary{background:var(--accent-grad); border-color:transparent; color:#fff; font-weight:600;}
+  button.danger{border-color:var(--bad); color:var(--bad);}
+  .wrap{max-width:520px; margin:0 auto; padding:16px;}
+  .card{background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:16px; animation:fadeInUp .18s ease both;}
+  @keyframes fadeInUp{from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);}}
+  .card h3{margin:0 0 10px; font-size:14px;}
+  .card p{color:var(--muted); font-size:12.5px; line-height:1.5; margin:0 0 10px;}
+  .row{display:flex; gap:8px; align-items:center; margin-bottom:8px;}
+  .row input{flex:1;}
+  .stat-row{display:flex; justify-content:space-between; font-size:12.5px; color:var(--muted); padding:4px 0; border-bottom:1px solid var(--border);}
+  .stat-row:last-child{border-bottom:none;}
+  #tokenStatus, #saveMsg{font-size:12.5px; margin-top:4px;}
+  #tokenStatus.ok, #saveMsg.ok{color:var(--good);}
+  #tokenStatus.err{color:var(--bad);}
+</style>
+<script>
+(function(){
+  var TOOL_NAME = "settings";
+  function callerLocation(){
+    try{
+      var lines = (new Error()).stack.split("\n").slice(3);
+      var line = lines.find(function(l){ return l && l.indexOf("callerLocation") === -1; }) || lines[0] || "";
+      var m = /((?:https?:\/\/|file:\/\/)[^\s)]+?):(\d+):(\d+)/.exec(line);
+      if (!m) return "";
+      var file = m[1].split("/").pop();
+      return " \u2014 " + file + ":" + m[2];
+    }catch(e){ return ""; }
+  }
+  function send(level, args){
+    if (window.parent === window) return;
+    try{
+      var text = Array.prototype.map.call(args, function(a){
+        if (typeof a === "string") return a;
+        try{ return JSON.stringify(a); }catch(e){ return String(a); }
+      }).join(" ");
+      parent.postMessage({__devConsole:true, tool:TOOL_NAME, level:level, time:Date.now(), text:text}, "*");
+    }catch(e){}
+  }
+  ["log","warn","error","info","debug"].forEach(function(level){
+    var orig = console[level] ? console[level].bind(console) : function(){};
+    console[level] = function(){
+      var loc = (level === "error" || level === "warn") ? callerLocation() : "";
+      var args = Array.prototype.slice.call(arguments);
+      if (loc) args.push(loc);
+      send(level, args);
+      orig.apply(console, arguments);
+    };
+  });
+  window.addEventListener("error", function(e){
+    var file = (e.filename||"").split("/").pop();
+    send("error", [e.message + " \u2014 " + file + ":" + e.lineno + ":" + e.colno]);
+  });
+  window.addEventListener("unhandledrejection", function(e){
+    var reason = e.reason && e.reason.message ? e.reason.message : e.reason;
+    send("error", ["Unhandled rejection: " + reason]);
+  });
+})();
+</script>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="card">
+    <h3>🔑 GitHub token</h3>
+    <p id="tokenStatus">Checking…</p>
+    <div class="row">
+      <input id="tokenInput" type="password" placeholder="Paste a new token to replace it">
+      <button id="showToken" title="Show/hide">👁</button>
+    </div>
+    <div class="row">
+      <button id="saveToken" class="primary">Save token</button>
+      <button id="clearToken" class="danger">Disconnect</button>
+    </div>
+    <p style="margin-top:8px;">Shared by the GitHub and Code tabs — saving or disconnecting here affects both.</p>
+  </div>
+
+  <div class="card">
+    <h3>💾 Local storage used by this suite</h3>
+    <div id="storageStats"></div>
+    <div class="row" style="margin-top:12px;">
+      <button id="clearDrafts">Clear unsaved code drafts</button>
+      <button id="clearHistory">Clear remembered paths</button>
+    </div>
+    <p id="saveMsg"></p>
+  </div>
+
+  <div class="card">
+    <h3>📲 Add to Home Screen</h3>
+    <p>This suite has an app icon and manifest set up. On a plain local file, Android's browser can still add a shortcut with that icon to your home screen — it just won't get the full offline "installed app" treatment browsers reserve for HTTPS sites.</p>
+    <p>Open the browser's <b>⋮ menu → Add to Home screen</b> from the Hub tab to get the icon. If you ever push this suite to a GitHub Pages–enabled repo (you already have the tool to do that), reopening it over HTTPS unlocks full install + offline support.</p>
+  </div>
+
+  <div class="card">
+    <h3>ℹ️ About</h3>
+    <p>Modev Suite — Device Lab, GitHub, Code Editor, and Settings, all running as local files with no hosting required. Built for editing and pushing code entirely from a phone.</p>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var TOKEN_KEY = "ghUploader.token";
+  var els = {};
+  ["tokenInput","showToken","saveToken","clearToken","tokenStatus","storageStats","clearDrafts","clearHistory","saveMsg"]
+    .forEach(function(id){ els[id] = document.getElementById(id); });
+
+  function refreshTokenStatus(){
+    var t = null;
+    try{ t = localStorage.getItem(TOKEN_KEY); }catch(e){}
+    if (!t){ els.tokenStatus.textContent = "Not connected."; els.tokenStatus.className = ""; return; }
+    els.tokenStatus.textContent = "Checking saved token…";
+    fetch("https://api.github.com/user", { headers: { Authorization: "token " + t } })
+      .then(function(r){ return r.ok ? r.json() : Promise.reject(new Error("Token rejected")); })
+      .then(function(user){ els.tokenStatus.textContent = "Connected as " + user.login; els.tokenStatus.className = "ok"; })
+      .catch(function(){ els.tokenStatus.textContent = "Saved token is invalid or expired."; els.tokenStatus.className = "err"; });
+  }
+  els.showToken.addEventListener("click", function(){ els.tokenInput.type = els.tokenInput.type === "password" ? "text" : "password"; });
+  els.saveToken.addEventListener("click", function(){
+    var t = els.tokenInput.value.trim();
+    if (!t) return;
+    try{ localStorage.setItem(TOKEN_KEY, t); }catch(e){}
+    els.tokenInput.value = "";
+    refreshTokenStatus();
+  });
+  els.clearToken.addEventListener("click", function(){
+    if (!confirm("Disconnect GitHub? You'll need to paste a token again in the GitHub or Code tab.")) return;
+    try{ localStorage.removeItem(TOKEN_KEY); }catch(e){}
+    refreshTokenStatus();
+  });
+
+  function humanBytes(n){ return n < 1024 ? n + " B" : (n/1024).toFixed(1) + " KB"; }
+  function refreshStorage(){
+    var groups = { "Device Lab": 0, "GitHub tool": 0, "Code Editor drafts": 0, "Code Editor state": 0, "Other": 0 };
+    var total = 0;
+    try{
+      for (var i = 0; i < localStorage.length; i++){
+        var key = localStorage.key(i);
+        var size = (key.length + (localStorage.getItem(key)||"").length) * 2;
+        total += size;
+        if (key.indexOf("deviceLab.") === 0) groups["Device Lab"] += size;
+        else if (key.indexOf("ghUploader.") === 0) groups["GitHub tool"] += size;
+        else if (key.indexOf("codeEditor.draft::") === 0) groups["Code Editor drafts"] += size;
+        else if (key.indexOf("codeEditor.") === 0) groups["Code Editor state"] += size;
+        else groups["Other"] += size;
+      }
+    }catch(e){}
+    els.storageStats.innerHTML = "";
+    Object.keys(groups).forEach(function(g){
+      var row = document.createElement("div");
+      row.className = "stat-row";
+      row.innerHTML = "<span>" + g + "</span><span>" + humanBytes(groups[g]) + "</span>";
+      els.storageStats.appendChild(row);
+    });
+    var totalRow = document.createElement("div");
+    totalRow.className = "stat-row";
+    totalRow.innerHTML = "<span><b>Total</b></span><span><b>" + humanBytes(total) + "</b></span>";
+    els.storageStats.appendChild(totalRow);
+  }
+
+  els.clearDrafts.addEventListener("click", function(){
+    if (!confirm("Clear all unsaved code drafts? Anything not pushed to GitHub yet will be lost.")) return;
+    try{
+      Object.keys(localStorage).filter(function(k){ return k.indexOf("codeEditor.draft::") === 0; })
+        .forEach(function(k){ localStorage.removeItem(k); });
+    }catch(e){}
+    els.saveMsg.textContent = "Drafts cleared."; els.saveMsg.className = "ok";
+    refreshStorage();
+  });
+  els.clearHistory.addEventListener("click", function(){
+    try{
+      var s = JSON.parse(localStorage.getItem("deviceLab.state.v1") || "{}");
+      delete s.knownPaths;
+      localStorage.setItem("deviceLab.state.v1", JSON.stringify(s));
+    }catch(e){}
+    els.saveMsg.textContent = "Remembered paths cleared."; els.saveMsg.className = "ok";
+    refreshStorage();
+  });
+
+  refreshTokenStatus();
+  refreshStorage();
+})();
+</script>
+</body>
+</html>
