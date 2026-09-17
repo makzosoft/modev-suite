@@ -138,6 +138,21 @@
   #commitsHead{display:flex; align-items:center; gap:8px; padding:10px; border-bottom:1px solid var(--border);}
   #commitsHead b{font-size:13px; flex:1;}
   #commitsList{flex:1; overflow-y:auto; padding:8px;}
+  #collabDrawer{
+    position:fixed; right:0; top:0; bottom:0; width:300px; max-width:88vw; background:var(--panel);
+    border-left:1px solid var(--border); z-index:90; transform:translateX(100%);
+    transition:transform .2s ease; display:flex; flex-direction:column;
+  }
+  #collabDrawer.open{transform:translateX(0);}
+  #collabHead{display:flex; align-items:center; gap:8px; padding:10px; border-bottom:1px solid var(--border);}
+  #collabHead b{font-size:13px; flex:1;}
+  #collabList{flex:1; overflow-y:auto; padding:8px;}
+  .collab-row{padding:10px 8px; border-bottom:1px solid var(--border); font-size:12.5px;}
+  .collab-row .who{display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;}
+  .collab-row .login{color:var(--text); font-weight:600;}
+  .collab-row .role{color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.4px;}
+  .collab-row .actions{display:flex; gap:6px;}
+  .collab-row .actions button{flex:1;}
   .commit-row{padding:10px 8px; border-bottom:1px solid var(--border); font-size:12.5px;}
   .commit-row .msg{color:var(--text); margin-bottom:3px; word-break:break-word;}
   .commit-row .meta{color:var(--muted); font-size:11px; display:flex; align-items:center; gap:6px;}
@@ -215,7 +230,10 @@
   @keyframes fadeInUp{ from{opacity:0; transform:translateY(5px);} to{opacity:1; transform:translateY(0);} }
   #connectScreen{animation:fadeInUp .25s ease both;}
   #loadingScreen .spinner{animation:spin .8s linear infinite;}
+  [data-icon]{display:inline-flex; align-items:center; justify-content:center; vertical-align:-3px;}
+  [data-icon] svg{width:15px; height:15px;}
 </style>
+<script src="icons.js"></script>
 <script>
 (function(){
   var TOOL_NAME = "github-uploader";
@@ -282,7 +300,7 @@
   </ol>
   <div id="tokenRow">
     <input id="tokenInput" type="password" placeholder="ghp_xxxxxxxxxxxx" spellcheck="false" autocapitalize="off">
-    <button id="showTokenBtn" class="small">👁</button>
+    <button id="showTokenBtn" class="small"><span data-icon="eye"></span></button>
     <button id="connectBtn" class="primary">Connect</button>
   </div>
   <div id="connectStatus"></div>
@@ -290,14 +308,14 @@
 
 <div id="mainApp" style="display:none; height:100%; flex-direction:column;">
   <div id="topbar">
-    <button id="undoBtn" class="icon" title="Undo last staging action">↶</button>
-    <button id="redoBtn" class="icon" title="Redo">↷</button>
+    <button id="undoBtn" class="icon" title="Undo last staging action"><span data-icon="undo"></span></button>
+    <button id="redoBtn" class="icon" title="Redo"><span data-icon="redo"></span></button>
     <span id="userChip"></span>
     <select id="repoSelect"><option value="">Select repo…</option></select>
     <select id="branchSelect"><option value="">Branch…</option></select>
-    <a id="visitPagesLink" class="icon" href="#" target="_blank" rel="noopener" title="Visit live GitHub Pages site" style="display:none; text-decoration:none;">🌐</a>
-    <a id="visitVercelLink" class="icon" href="#" target="_blank" rel="noopener" title="Visit live Vercel deployment" style="display:none; text-decoration:none;">▲</a>
-    <button id="commitsBtn" class="small" title="Recent commits">🕓</button>
+    <a id="visitPagesLink" class="icon" href="#" target="_blank" rel="noopener" title="Visit live GitHub Pages site" style="display:none; text-decoration:none;"><span data-icon="globe"></span></a>
+    <a id="visitVercelLink" class="icon" href="#" target="_blank" rel="noopener" title="Visit live Vercel deployment" style="display:none; text-decoration:none;"><span data-icon="triangle"></span></a>
+    <button id="commitsBtn" class="small" title="Recent commits"><span data-icon="clock"></span></button>
     <button id="moreBtn" class="small" title="More actions">⋯</button>
     <span id="topStatus"></span>
   </div>
@@ -308,25 +326,26 @@
     <div class="more-section">
       <label class="more-label">Find a repo</label>
       <input id="repoFilter" placeholder="Filter repos…">
-      <button id="newRepoBtn">➕ Create new repo</button>
+      <button id="newRepoBtn"><span data-icon="plus"></span> Create new repo</button>
     </div>
     <div class="more-section">
       <label class="more-label">Branches</label>
-      <button id="newBranchBtn">🌿 New branch from current</button>
-      <button id="prBtn">🔀 Open pull request</button>
+      <button id="newBranchBtn"><span data-icon="git-branch"></span> New branch from current</button>
+      <button id="prBtn"><span data-icon="git-pr"></span> Open pull request</button>
     </div>
     <div class="more-section">
       <label class="more-label">Download</label>
-      <button id="downloadZipBtn">⬇ Download repo as .zip</button>
+      <button id="downloadZipBtn"><span data-icon="download"></span> Download repo as .zip</button>
     </div>
     <div class="more-section">
       <label class="more-label">Team</label>
-      <button id="inviteBtn">👥 Invite collaborator</button>
+      <button id="collabBtn"><span data-icon="users"></span> Manage collaborators</button>
     </div>
     <div class="more-section">
       <label class="more-label">Publish</label>
-      <button id="publishPagesBtn">🌐 Publish to GitHub Pages</button>
-      <button id="deployVercelBtn">▲ Deploy to Vercel</button>
+      <button id="publishPagesBtn"><span data-icon="globe"></span> Publish to GitHub Pages</button>
+      <button id="unpublishPagesBtn"><span data-icon="ban"></span> Turn off GitHub Pages</button>
+      <button id="deployVercelBtn"><span data-icon="triangle"></span> Deploy to Vercel</button>
       <p id="publishStatus" style="font-size:11.5px; color:var(--muted); margin:2px 0 0;"></p>
     </div>
     <div class="more-section">
@@ -340,10 +359,18 @@
     <div id="commitsList"></div>
   </div>
 
+  <div id="collabDrawer">
+    <div id="collabHead"><b>Collaborators</b><button id="collabClose" class="small">Close</button></div>
+    <div class="more-section" style="border-bottom:1px solid var(--border);">
+      <button id="inviteBtn"><span data-icon="plus"></span> Invite new collaborator</button>
+    </div>
+    <div id="collabList"></div>
+  </div>
+
   <div id="split">
     <div class="panel" id="ghPanel">
       <div class="panel-head">
-        <span><svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" style="vertical-align:-3px;"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></span>
+        <span data-icon="octopus"></span>
         <div id="breadcrumb"></div>
       </div>
       <div class="panel-body">
@@ -355,9 +382,9 @@
     </div>
 
     <div class="panel" id="filesPanel">
-      <div class="panel-head"><span>📱</span><span>Your device</span></div>
+      <div class="panel-head"><span data-icon="smartphone"></span><span>Your device</span></div>
       <div class="panel-body">
-        <button id="addFilesBtn">➕ Choose files from phone</button>
+        <button id="addFilesBtn"><span data-icon="plus"></span> Choose files from phone</button>
         <input id="fileInput" type="file" multiple style="display:none;">
         <div id="fileList"></div>
         <div id="emptyFiles">No files selected yet. Choose files, then drag a card onto a folder on the left.</div>
@@ -368,7 +395,7 @@
   <div id="pendingBar">
     <span id="pendingLabel">No pending changes</span>
     <button id="clearPendingBtn" class="small">Clear</button>
-    <button id="pushBtn" class="primary" disabled>🚀 Push changes</button>
+    <button id="pushBtn" class="primary" disabled><span data-icon="send"></span> Push changes</button>
   </div>
   <div id="pendingDrawer">
     <div id="pendingHead"><b>Pending changes — nothing is sent to GitHub until you tap Push</b><button id="pendingClose" class="small">Close</button></div>
@@ -400,6 +427,7 @@
    "moreBtn","moreBackdrop","moreDrawer","moreClose","newRepoBtn",
    "visitPagesLink","visitVercelLink","publishPagesBtn","deployVercelBtn","publishStatus",
    "downloadZipBtn","inviteBtn","disconnectVercelBtn",
+   "collabBtn","collabDrawer","collabHead","collabList","collabClose","unpublishPagesBtn",
    "diffDrawer","diffHead","diffTitle","diffBody","diffClose",
    "undoBtn","redoBtn"
   ].forEach(function(id){ els[id] = document.getElementById(id); });
@@ -764,7 +792,7 @@
       var row = document.createElement("div");
       row.className = "row-item" + (entry.type === "dir" ? " dir drop-zone" : "");
       if (entry.type === "dir") row.dataset.path = entry.path;
-      row.innerHTML = '<span class="ic">' + (entry.type === "dir" ? "📁" : "📄") + '</span><span class="nm">' + entry.name + "</span>";
+      row.innerHTML = '<span class="ic" data-icon="' + (entry.type === "dir" ? "folder" : "file") + '"></span><span class="nm">' + entry.name + "</span>";
       if (entry.type === "dir"){
         row.addEventListener("click", function(e){
           if (row.classList.contains("nav-blocked")) return;
@@ -779,7 +807,7 @@
         var delBtn = document.createElement("button");
         delBtn.className = "del-file-btn small";
         delBtn.title = "Stage for deletion";
-        delBtn.textContent = "🗑";
+        delBtn.innerHTML = '<span data-icon="trash"></span>';
         delBtn.addEventListener("click", function(e){
           e.stopPropagation();
           if (row.classList.contains("staged-delete")) return;
@@ -789,7 +817,7 @@
         var dlBtn = document.createElement("button");
         dlBtn.className = "del-file-btn small";
         dlBtn.title = "Download this file";
-        dlBtn.textContent = "⬇";
+        dlBtn.innerHTML = '<span data-icon="download"></span>';
         dlBtn.addEventListener("click", function(e){
           e.stopPropagation();
           downloadSingleFile(entry.path, entry.name);
@@ -855,13 +883,55 @@
       .then(function(){ els.downloadZipBtn.disabled = false; });
   });
 
+  function openCollabDrawer(){ els.collabDrawer.classList.add("open"); loadCollaborators(); }
+  function closeCollabDrawer(){ els.collabDrawer.classList.remove("open"); }
+  els.collabBtn.addEventListener("click", function(){ closeMore(); openCollabDrawer(); });
+  els.collabClose.addEventListener("click", closeCollabDrawer);
+
+  function loadCollaborators(){
+    if (!state.owner || !state.repo){ els.collabList.innerHTML = '<div class="collab-row">Pick a repo first.</div>'; return; }
+    els.collabList.innerHTML = '<div class="collab-row">Loading…</div>';
+    fetch(API + "/repos/" + state.owner + "/" + state.repo + "/collaborators?per_page=100", { headers: ghHeaders() })
+      .then(function(r){ if (!r.ok) throw new Error("GitHub error " + r.status + (r.status === 403 ? " (needs admin access on this repo)" : "")); return r.json(); })
+      .then(function(collabs){
+        els.collabList.innerHTML = "";
+        if (!collabs.length){ els.collabList.innerHTML = '<div class="collab-row">No collaborators yet.</div>'; return; }
+        collabs.forEach(function(c){
+          var role = c.role_name || (c.permissions && Object.keys(c.permissions).reverse().find(function(k){ return c.permissions[k]; })) || "?";
+          var row = document.createElement("div");
+          row.className = "collab-row";
+          row.innerHTML =
+            '<div class="who"><span class="login">' + c.login + '</span><span class="role">' + role + '</span></div>' +
+            '<div class="actions"><button class="small" data-act="edit">Edit</button><button class="small" data-act="remove">Remove</button></div>';
+          row.querySelector('[data-act="edit"]').addEventListener("click", function(){
+            var newRole = prompt("New permission for " + c.login + " — pull, push, admin, maintain, or triage:", role);
+            if (!newRole) return;
+            fetch(API + "/repos/" + state.owner + "/" + state.repo + "/collaborators/" + encodeURIComponent(c.login), {
+              method: "PUT",
+              headers: Object.assign({ "Content-Type": "application/json" }, ghHeaders()),
+              body: JSON.stringify({ permission: newRole.trim() })
+            })
+              .then(function(res){ if (!res.ok) throw new Error("GitHub error " + res.status); showToast("Updated " + c.login, "ok"); loadCollaborators(); })
+              .catch(function(err){ showToast("Update failed: " + err.message, "err"); });
+          });
+          row.querySelector('[data-act="remove"]').addEventListener("click", function(){
+            if (!confirm("Remove " + c.login + " from this repo?")) return;
+            fetch(API + "/repos/" + state.owner + "/" + state.repo + "/collaborators/" + encodeURIComponent(c.login), { method: "DELETE", headers: ghHeaders() })
+              .then(function(res){ if (!res.ok && res.status !== 204) throw new Error("GitHub error " + res.status); showToast("Removed " + c.login, "ok"); loadCollaborators(); })
+              .catch(function(err){ showToast("Remove failed: " + err.message, "err"); });
+          });
+          els.collabList.appendChild(row);
+        });
+      })
+      .catch(function(err){ els.collabList.innerHTML = '<div class="collab-row">' + err.message + '</div>'; });
+  }
+
   els.inviteBtn.addEventListener("click", function(){
     if (!state.owner || !state.repo){ setTopStatus("Pick a repo first.", "err"); return; }
     var username = prompt("GitHub username to invite as a collaborator:", "");
     if (!username) return;
-    var permission = prompt("Permission level: pull, push, or admin", "push");
+    var permission = prompt("Permission level: pull, push, admin, maintain, or triage", "push");
     if (!permission) return;
-    setTopStatus("Inviting " + username + "…");
     fetch(API + "/repos/" + state.owner + "/" + state.repo + "/collaborators/" + encodeURIComponent(username.trim()), {
       method: "PUT",
       headers: Object.assign({ "Content-Type": "application/json" }, ghHeaders()),
@@ -869,10 +939,26 @@
     })
       .then(function(res){ if (!res.ok) return res.json().then(function(d){ throw new Error(d.message || ("GitHub error " + res.status)); }); return res.status === 204 ? null : res.json(); })
       .then(function(){
-        setTopStatus("Invited " + username, "ok");
         showToast("Invitation sent to " + username, "ok");
+        loadCollaborators();
       })
-      .catch(function(err){ setTopStatus("Invite failed: " + err.message, "err"); showToast("Invite failed", "err"); });
+      .catch(function(err){ showToast("Invite failed: " + err.message, "err"); });
+  });
+
+  els.unpublishPagesBtn.addEventListener("click", function(){
+    if (!state.owner || !state.repo){ setTopStatus("Pick a repo first.", "err"); return; }
+    if (!confirm("Turn off GitHub Pages for this repo? The live site will stop being served.")) return;
+    els.publishStatus.textContent = "Turning off Pages…";
+    fetch(API + "/repos/" + state.owner + "/" + state.repo + "/pages", { method: "DELETE", headers: ghHeaders() })
+      .then(function(res){ if (!res.ok && res.status !== 204) throw new Error("GitHub error " + res.status); })
+      .then(function(){
+        var map = getUrlMap("ghUploader.pagesUrls"); delete map[repoKey()];
+        try{ localStorage.setItem("ghUploader.pagesUrls", JSON.stringify(map)); }catch(e){}
+        els.visitPagesLink.style.display = "none";
+        els.publishStatus.textContent = "GitHub Pages turned off.";
+        showToast("GitHub Pages turned off", "ok");
+      })
+      .catch(function(err){ els.publishStatus.textContent = "Failed: " + err.message; showToast("Turn off failed", "err"); });
   });
 
   els.disconnectVercelBtn.addEventListener("click", function(){
@@ -991,15 +1077,15 @@
       card.dataset.id = entry.id;
       var stateHtml = "";
       if (entry.status === "uploading") stateHtml = '<span class="state">' + (entry.progress || "…") + '</span>';
-      else if (entry.status === "done") stateHtml = '<span class="state ok">✓ ' + (entry.msg||"") + '</span>';
-      else if (entry.status === "error") stateHtml = '<span class="state err" title="' + (entry.msg||"").replace(/"/g,"") + '">✕</span>';
+      else if (entry.status === "done") stateHtml = '<span class="state ok"><span data-icon="check"></span> ' + (entry.msg||"") + '</span>';
+      else if (entry.status === "error") stateHtml = '<span class="state err" title="' + (entry.msg||"").replace(/"/g,"") + '"><span data-icon="x"></span></span>';
       var isZip = /\.zip$/i.test(entry.file.name);
       card.innerHTML =
-        '<span class="ic">' + (isZip ? "🗜️" : "📄") + '</span>' +
+        '<span class="ic" data-icon="' + (isZip ? "archive" : "file") + '"></span>' +
         '<span class="nm">' + entry.file.name + '</span>' +
         '<span class="sz">' + humanSize(entry.file.size) + '</span>' +
         stateHtml +
-        '<button class="rm small" title="Remove">✕</button>';
+        '<button class="rm small" title="Remove"><span data-icon="x"></span></button>';
       if (isZip){
         var extractRow = document.createElement("label");
         extractRow.style.cssText = "display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);margin-top:-2px;margin-bottom:6px;padding-left:2px;";
@@ -1043,7 +1129,7 @@
       card.setPointerCapture(e.pointerId);
       card.classList.add("dragging");
       dragCtx = { entry: entry, pointerId: e.pointerId };
-      els.ghostCard.textContent = "📄 " + entry.file.name;
+      els.ghostCard.innerHTML = '<span data-icon="file"></span> ' + entry.file.name;
       els.ghostCard.style.display = "block";
       positionGhost(e.clientX, e.clientY);
     });
@@ -1152,11 +1238,11 @@
       var target = item.type === "delete" ? item.path : ((item.destFolder ? item.destFolder + "/" : "") + item.label);
       row.innerHTML = '<span class="type-tag">' + typeLabel + '</span><span class="nm">/' + target + '</span>';
       var pv = document.createElement("button");
-      pv.className = "small"; pv.textContent = "👁"; pv.title = "Preview this change";
+      pv.className = "small"; pv.innerHTML = '<span data-icon="eye"></span>'; pv.title = "Preview this change";
       pv.addEventListener("click", function(){ previewChange(item); });
       row.appendChild(pv);
       var rm = document.createElement("button");
-      rm.className = "small"; rm.textContent = "✕";
+      rm.className = "small"; rm.innerHTML = '<span data-icon="x"></span>';
       rm.addEventListener("click", function(){ unstageById(item.id); });
       row.appendChild(rm);
       els.pendingList.appendChild(row);
@@ -1380,13 +1466,29 @@
   });
 
   // ------------------------------------------------------------------
-  // Boot
+  // Boot — optimistic: a cached token shows the app INSTANTLY (no spinner,
+  // no connect-screen flash) since this reloads from scratch on every hub
+  // tab switch by design (that's what keeps memory low). Verifying via a
+  // network round-trip first would make every switch feel like reconnecting.
+  // Identity/validity is confirmed quietly in the background instead; a
+  // truly bad token surfaces naturally the first time an API call fails.
   // ------------------------------------------------------------------
   var savedToken = null;
   try{ savedToken = localStorage.getItem(TOKEN_KEY); }catch(e){}
   if (savedToken){
-    showScreen("loading");
-    connectWithToken(savedToken);
+    state.token = savedToken;
+    showScreen("app");
+    loadRepos();
+    fetch(API + "/user", { headers: { "Authorization": "token " + savedToken } })
+      .then(function(res){ if (!res.ok) throw new Error("invalid"); return res.json(); })
+      .then(function(user){
+        state.username = user.login; state.avatar = user.avatar_url;
+        els.userChip.innerHTML = state.avatar ? '<img src="' + state.avatar + '"> ' + state.username : state.username;
+      })
+      .catch(function(){
+        showScreen("connect");
+        setConnectStatus("Your saved token seems to be invalid or expired — please reconnect.", "err");
+      });
   } else {
     showScreen("connect");
   }
