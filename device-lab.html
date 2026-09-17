@@ -146,7 +146,10 @@
   /* ---------- Mobile-first tap feedback ---------- */
   button{transition:transform .1s ease;}
   button:active{transform:scale(.94);}
+  [data-icon]{display:inline-flex; align-items:center; justify-content:center; vertical-align:-3px;}
+  [data-icon] svg{width:15px; height:15px;}
 </style>
+<script src="icons.js"></script>
 <script>
 (function(){
   var TOOL_NAME = "device-lab";
@@ -199,10 +202,9 @@
 <body>
 
 <div id="topbar">
-  <button id="menuBtn" class="icon" title="Open controls">☰</button>
+  <button id="menuBtn" class="icon" title="Open controls"><span data-icon="menu"></span></button>
   <div id="topbarTitle"><b id="topbarPage">No page loaded</b><span id="topbarDims"></span></div>
-  <button id="reloadBtnMobile" class="icon" title="Reload">↻</button>
-  <button class="icon layoutToggleBtn" title="Toggle desktop layout">🖥️</button>
+  <button id="reloadBtnMobile" class="icon" title="Reload"><span data-icon="refresh"></span></button>
 </div>
 
 <div id="drawerBackdrop"></div>
@@ -214,7 +216,7 @@
     <div class="panel-section-label acc-head">Source <span class="acc-chevron">▾</span></div>
     <div class="acc-body"><div class="acc-body-inner">
       <div class="row">
-        <button id="folderBtn" title="Select the project folder to auto-list its HTML pages">📁 Select folder</button>
+        <button id="folderBtn" title="Select the project folder to auto-list its HTML pages"><span data-icon="folder"></span> Select folder</button>
         <button id="dropHint" class="icon" title="You can also drag & drop a folder or files here (desktop)">⤵</button>
       </div>
       <select id="pageSelect" title="Pages found in the connected folder">
@@ -235,7 +237,7 @@
     <div class="panel-section-label acc-head">Or preview from GitHub <span class="acc-chevron">▾</span></div>
     <div class="acc-body"><div class="acc-body-inner">
       <div id="ghConnectRow" class="row">
-        <button id="ghConnectBtn">🔗 Connect GitHub</button>
+        <button id="ghConnectBtn"><span data-icon="link"></span> Connect GitHub</button>
       </div>
       <div id="ghBrowseRow" style="display:none;">
         <div class="row">
@@ -294,11 +296,10 @@
     <div class="panel-section-label acc-head">Tool <span class="acc-chevron">▾</span></div>
     <div class="acc-body"><div class="acc-body-inner">
       <div class="row">
-        <button id="reloadBtn" class="icon" title="Reload page">↻</button>
+        <button id="reloadBtn" class="icon" title="Reload page"><span data-icon="refresh"></span></button>
         <button id="gridToggleBtn" title="Show devices side by side">⊞ Grid</button>
-        <button id="screenshotBtn" title="Export the current frame as a PNG">📷</button>
-        <button id="recordBtn" title="Record a short auto-scroll video clip (.webm)">🎥</button>
-        <button class="layoutToggleBtn" title="Toggle desktop layout">🖥️ Desktop layout</button>
+        <button id="screenshotBtn" title="Export the current frame as a PNG"><span data-icon="camera"></span></button>
+        <button id="recordBtn" title="Record a short auto-scroll video clip (.webm)"><span data-icon="video"></span></button>
         <button id="closeDrawerBtn" title="Close">Close</button>
       </div>
     </div></div>
@@ -315,7 +316,7 @@
     </div>
   </div>
   <div id="empty" style="display:none;">
-    Tap <b>📁 Select folder</b> and choose the folder this file is in — Device Lab lists every HTML page automatically and opens <code>index.html</code> by default. Desktop browsers can also drag &amp; drop a folder onto this page. Or type a path in the drawer and hit Load.
+    Tap <b><span data-icon="folder"></span> Select folder</b> and choose the folder this file is in — Device Lab lists every HTML page automatically and opens <code>index.html</code> by default. Desktop browsers can also drag &amp; drop a folder onto this page. Or type a path in the drawer and hit Load.
   </div>
 </div>
 
@@ -367,8 +368,6 @@
    "ghConnectRow","ghConnectBtn","ghBrowseRow","ghRepoSelect","ghBranchSelect","ghBreadcrumb","ghFileList","ghStatus"
   ].forEach(function(id){ els[id] = document.getElementById(id); });
   els.iframe = els.previewFrame;
-  var layoutToggleBtns = document.querySelectorAll(".layoutToggleBtn");
-
   var STORAGE_KEY = "deviceLab.state.v1";
   var zoom = 1;
   var discoveredFiles = [];
@@ -450,7 +449,13 @@
   function finalizeDiscoveredFiles(files, folderLabel, opts){
     opts = opts || {};
     discoveredFiles = sortFiles(files);
-    if (folderLabel){ els.folderBtn.textContent = "📁 " + folderLabel; els.folderBtn.classList.add("connected"); }
+    if (folderLabel){
+      els.folderBtn.innerHTML = "";
+      var fIcon = document.createElement("span"); fIcon.setAttribute("data-icon","folder");
+      els.folderBtn.appendChild(fIcon);
+      els.folderBtn.appendChild(document.createTextNode(" " + folderLabel));
+      els.folderBtn.classList.add("connected");
+    }
 
     var ownName = decodeURIComponent(location.pathname.split("/").pop() || "");
     var looksRight = !ownName || discoveredFiles.some(function(f){ return f.toLowerCase()===ownName.toLowerCase(); });
@@ -592,7 +597,10 @@
       if (!handle) return;
       return handle.queryPermission({mode:"read"}).then(function(perm){
         if (perm === "granted") return connectHandle(handle);
-        els.folderBtn.textContent = "📁 Reconnect folder";
+        els.folderBtn.innerHTML = "";
+        var rIcon = document.createElement("span"); rIcon.setAttribute("data-icon","folder");
+        els.folderBtn.appendChild(rIcon);
+        els.folderBtn.appendChild(document.createTextNode(" Reconnect folder"));
         els.folderBtn.onclick = function(){
           handle.requestPermission({mode:"read"}).then(function(p){
             if (p === "granted"){ els.folderBtn.onclick = connectFolder; connectHandle(handle); }
@@ -774,7 +782,7 @@
         entries.forEach(function(entry){
           var row = document.createElement("div");
           row.className = "gh-row";
-          row.innerHTML = '<span>' + (entry.type === "dir" ? "📁" : "📄") + '</span><span class="nm">' + entry.name + "</span>";
+          row.innerHTML = '<span data-icon="' + (entry.type === "dir" ? "folder" : "file") + '"></span><span class="nm">' + entry.name + "</span>";
           row.addEventListener("click", function(){
             if (entry.type === "dir") ghLoadFolder(entry.path);
             else ghLoadFile(entry.path);
@@ -793,7 +801,7 @@
         els.empty.style.display = "none"; els.device.style.display = ""; els.frameLabel.style.display = "";
         els.iframe.removeAttribute("src");
         els.iframe.srcdoc = html2;
-        var label = "🐙 " + gh.repo + "/" + path;
+        var label = "GitHub: " + gh.repo + "/" + path;
         els.pathInput.value = label;
         els.topbarPage.textContent = label;
         els.ghStatus.textContent = "Loaded " + path;
@@ -1085,20 +1093,6 @@
   els.drawerBackdrop.addEventListener("click", closeDrawer);
 
   // ---------------- layout toggle (force desktop vs. responsive) ----------------
-  function setLayoutMode(forceDesktop){
-    document.documentElement.classList.toggle("force-desktop", !!forceDesktop);
-    layoutToggleBtns.forEach(function(b){
-      b.textContent = forceDesktop ? "📱 Compact layout" : "🖥️ Desktop layout";
-    });
-    saveState({forceDesktop: !!forceDesktop});
-    if (!forceDesktop) closeDrawer();
-  }
-  layoutToggleBtns.forEach(function(b){
-    b.addEventListener("click", function(){
-      setLayoutMode(!document.documentElement.classList.contains("force-desktop"));
-    });
-  });
-
   // ---------------- wire remaining events ----------------
   els.folderBtn.addEventListener("click", connectFolder);
   els.pageSelect.addEventListener("change", function(){
@@ -1153,7 +1147,6 @@
   populateDeviceSelect();
   var saved = loadState();
   renderKnownPaths(saved.knownPaths);
-  setLayoutMode(!!saved.forceDesktop);
 
   var restoredDevice=false;
   if (saved.deviceValue && saved.deviceValue!=="custom"){
