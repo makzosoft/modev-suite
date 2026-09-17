@@ -31,7 +31,10 @@
   #tokenStatus, #saveMsg{font-size:12.5px; margin-top:4px;}
   #tokenStatus.ok, #saveMsg.ok{color:var(--good);}
   #tokenStatus.err{color:var(--bad);}
+  [data-icon]{display:inline-flex; align-items:center; justify-content:center; vertical-align:-3px;}
+  [data-icon] svg{width:15px; height:15px;}
 </style>
+<script src="icons.js"></script>
 <script>
 (function(){
   var TOOL_NAME = "settings";
@@ -80,11 +83,11 @@
 <div class="wrap">
 
   <div class="card">
-    <h3>🔑 GitHub token</h3>
+    <h3><span data-icon="key"></span> GitHub token</h3>
     <p id="tokenStatus">Checking…</p>
     <div class="row">
       <input id="tokenInput" type="password" placeholder="Paste a new token to replace it">
-      <button id="showToken" title="Show/hide">👁</button>
+      <button id="showToken" title="Show/hide"><span data-icon="eye"></span></button>
     </div>
     <div class="row">
       <button id="saveToken" class="primary">Save token</button>
@@ -94,11 +97,11 @@
   </div>
 
   <div class="card">
-    <h3>▲ Vercel token</h3>
+    <h3><span data-icon="triangle"></span> Vercel token</h3>
     <p id="vercelStatus">Checking…</p>
     <div class="row">
       <input id="vercelTokenInput" type="password" placeholder="Paste a new token to replace it">
-      <button id="showVercelToken" title="Show/hide">👁</button>
+      <button id="showVercelToken" title="Show/hide"><span data-icon="eye"></span></button>
     </div>
     <div class="row">
       <button id="saveVercelToken" class="primary">Save token</button>
@@ -108,7 +111,7 @@
   </div>
 
   <div class="card">
-    <h3>💾 Local storage used by this suite</h3>
+    <h3><span data-icon="save"></span> Local storage used by this suite</h3>
     <div id="storageStats"></div>
     <div class="row" style="margin-top:12px;">
       <button id="clearDrafts">Clear unsaved code drafts</button>
@@ -118,13 +121,13 @@
   </div>
 
   <div class="card">
-    <h3>📲 Add to Home Screen</h3>
+    <h3><span data-icon="smartphone"></span> Add to Home Screen</h3>
     <p>This suite has an app icon and manifest set up. On a plain local file, Android's browser can still add a shortcut with that icon to your home screen — it just won't get the full offline "installed app" treatment browsers reserve for HTTPS sites.</p>
     <p>Open the browser's <b>⋮ menu → Add to Home screen</b> from the Hub tab to get the icon. If you ever push this suite to a GitHub Pages–enabled repo (you already have the tool to do that), reopening it over HTTPS unlocks full install + offline support.</p>
   </div>
 
   <div class="card">
-    <h3>ℹ️ About</h3>
+    <h3><span data-icon="bulb"></span> About</h3>
     <p>Modev Suite — Device Lab, GitHub, Code Editor, and Settings, all running as local files with no hosting required. Built for editing and pushing code entirely from a phone.</p>
   </div>
 
