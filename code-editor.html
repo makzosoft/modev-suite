@@ -190,7 +190,10 @@
   .row-item, .tab-chip{animation:fadeInUp .16s ease both;}
   @keyframes fadeInUp{ from{opacity:0; transform:translateY(5px);} to{opacity:1; transform:translateY(0);} }
   #connectScreen{animation:fadeInUp .25s ease both;}
+  [data-icon]{display:inline-flex; align-items:center; justify-content:center; vertical-align:-3px;}
+  [data-icon] svg{width:15px; height:15px;}
 </style>
+<script src="icons.js"></script>
 <script>
 (function(){
   var TOOL_NAME = "code-editor";
@@ -254,7 +257,7 @@
   </ol>
   <div id="tokenRow">
     <input id="tokenInput" type="password" placeholder="ghp_xxxxxxxxxxxx" spellcheck="false" autocapitalize="off">
-    <button id="showTokenBtn" class="small">👁</button>
+    <button id="showTokenBtn" class="small"><span data-icon="eye"></span></button>
     <button id="connectBtn" class="primary">Connect</button>
   </div>
   <div id="connectStatus"></div>
@@ -262,14 +265,14 @@
 
 <div id="app">
   <div id="topbar">
-    <button id="drawerToggle" class="icon">☰</button>
-    <button id="undoBtn" class="icon" title="Undo">↶</button>
-    <button id="redoBtn" class="icon" title="Redo">↷</button>
+    <button id="drawerToggle" class="icon"><span data-icon="menu"></span></button>
+    <button id="undoBtn" class="icon" title="Undo"><span data-icon="undo"></span></button>
+    <button id="redoBtn" class="icon" title="Redo"><span data-icon="redo"></span></button>
     <select id="repoSelect"><option value="">Repo…</option></select>
     <select id="branchSelect"><option value="">Branch…</option></select>
     <span id="fileLabel">No file open</span>
-    <button id="previewBtn" class="small" title="Live preview (HTML files)">👁</button>
-    <button id="saveBtn" class="primary small" title="Commit to GitHub">💾 Save</button>
+    <button id="previewBtn" class="small" title="Live preview (HTML files)"><span data-icon="eye"></span></button>
+    <button id="saveBtn" class="primary small" title="Commit to GitHub"><span data-icon="save"></span> Save</button>
     <button id="moreBtn" class="small" title="More">⋯</button>
     <span id="topStatus"></span>
   </div>
@@ -279,16 +282,16 @@
     <div class="more-head"><b>More</b><button id="moreClose" class="small">Close</button></div>
     <div class="more-section">
       <label class="more-label">Repo</label>
-      <button id="newRepoBtn">➕ Create new repo</button>
+      <button id="newRepoBtn"><span data-icon="plus"></span> Create new repo</button>
     </div>
     <div class="more-section">
       <label class="more-label">Editor</label>
       <div class="more-row">
         <button id="fontDown">A-</button>
         <button id="fontUp">A+</button>
-        <button id="findBtn">🔍 Find &amp; replace</button>
+        <button id="findBtn"><span data-icon="search"></span> Find &amp; replace</button>
       </div>
-      <button id="formatBtn">✨ Format with Prettier</button>
+      <button id="formatBtn"><span data-icon="sparkle"></span> Format with Prettier</button>
     </div>
   </div>
 
@@ -298,8 +301,8 @@
     <div id="fileDrawerBackdrop"></div>
     <div id="fileDrawer">
       <div id="sourceTabs">
-        <button id="sourceTabGh" class="src-tab active">🐙 GitHub</button>
-        <button id="sourceTabLocal" class="src-tab">📁 Local folder</button>
+        <button id="sourceTabGh" class="src-tab active"><span data-icon="octopus"></span> GitHub</button>
+        <button id="sourceTabLocal" class="src-tab"><span data-icon="folder"></span> Local folder</button>
       </div>
       <div id="ghSourcePane">
         <div id="breadcrumb"></div>
@@ -312,7 +315,7 @@
       </div>
       <div id="localSourcePane" style="display:none;">
         <div id="localConnectRow" class="row" style="padding:8px;">
-          <button id="localConnectBtn">📁 Select folder</button>
+          <button id="localConnectBtn"><span data-icon="folder"></span> Select folder</button>
           <input id="localFolderInput" type="file" webkitdirectory directory multiple style="display:none;">
         </div>
         <div id="localBreadcrumb" style="display:none; padding:8px 10px; font-size:11.5px; color:var(--muted); border-bottom:1px solid var(--border); overflow-x:auto; white-space:nowrap;"></div>
@@ -322,7 +325,7 @@
       </div>
     </div>
     <div id="editorPane">
-      <div id="editorHost"><div id="emptyEditor">Open ☰ and pick a file, or create a new one, to start editing.</div></div>
+      <div id="editorHost"><div id="emptyEditor">Open <span data-icon="menu"></span> and pick a file, or create a new one, to start editing.</div></div>
       <div id="quickbar">
         <button data-ins="\t">Tab</button>
         <button data-ins="{">{ }</button>
@@ -336,7 +339,7 @@
         <button data-ins=">">&gt;</button>
         <button data-ins="/">/</button>
         <button data-ins="=">=</button>
-        <button id="emmetBtn" title="Expand Emmet abbreviation">⚡Emmet</button>
+        <button id="emmetBtn" title="Expand Emmet abbreviation"><span data-icon="zap"></span>Emmet</button>
       </div>
     </div>
   </div>
@@ -346,8 +349,8 @@
   <div id="previewHead">
     <b id="previewTitle">Live preview</b>
     <select id="previewDeviceSelect"></select>
-    <button id="previewRefresh" class="icon small" title="Refresh">↻</button>
-    <button id="previewCloseBtn" class="icon small" title="Close">✕</button>
+    <button id="previewRefresh" class="icon small" title="Refresh"><span data-icon="refresh"></span></button>
+    <button id="previewCloseBtn" class="icon small" title="Close"><span data-icon="x"></span></button>
   </div>
   <div id="previewStage">
     <div id="previewFrameHolder">
@@ -358,7 +361,7 @@
   </div>
   <button id="consoleToggle" title="Console & JS REPL">⌘<span class="badge" id="consoleBadge">0</span></button>
   <div id="consoleWrap">
-    <div id="consoleHead">Console — logs from the preview, plus a JS REPL <button id="consoleClearBtn" class="icon small" style="margin-left:auto;">Clear</button><button id="consoleHideBtn" class="icon small">✕</button></div>
+    <div id="consoleHead">Console — logs from the preview, plus a JS REPL <button id="consoleClearBtn" class="icon small" style="margin-left:auto;">Clear</button><button id="consoleHideBtn" class="icon small"><span data-icon="x"></span></button></div>
     <div id="consoleLog"></div>
     <div id="replRow">
       <input id="replInput" placeholder="Run JS against the preview…">
@@ -543,19 +546,19 @@
     filtered.forEach(function(entry){
       var row = document.createElement("div");
       row.className = "row-item";
-      row.innerHTML = '<span>' + (entry.type==="dir"?"📁":"📄") + '</span><span class="nm">' + entry.name + "</span>";
+      row.innerHTML = '<span data-icon="' + (entry.type==="dir"?"folder":"file") + '"></span><span class="nm">' + entry.name + "</span>";
       row.addEventListener("click", function(){
         if (entry.type === "dir"){ gh.path = entry.path; saveEditorState(); loadFolder(gh.path); }
         else openFileInEditor(entry.path, entry.sha);
       });
       if (entry.type !== "dir"){
         var renBtn = document.createElement("button");
-        renBtn.className = "icon small"; renBtn.title = "Rename or move"; renBtn.textContent = "✏️";
+        renBtn.className = "icon small"; renBtn.title = "Rename or move"; renBtn.innerHTML = '<span data-icon="edit"></span>';
         renBtn.addEventListener("click", function(e){ e.stopPropagation(); renameFile(entry.path, entry.sha); });
         row.appendChild(renBtn);
 
         var delBtn = document.createElement("button");
-        delBtn.className = "icon small"; delBtn.title = "Delete this file from GitHub"; delBtn.textContent = "🗑";
+        delBtn.className = "icon small"; delBtn.title = "Delete this file from GitHub"; delBtn.innerHTML = '<span data-icon="trash"></span>';
         delBtn.addEventListener("click", function(e){
           e.stopPropagation();
           if (!confirm("Delete " + entry.path + " from GitHub? This can't be undone from here — click OK only if you're sure.")) return;
@@ -700,10 +703,10 @@
       var chip = document.createElement("div");
       chip.className = "tab-chip" + (buf.id === activeId ? " active" : "");
       var name = buf.path.split("/").pop();
-      var srcIcon = (buf.source === "local-fsa" || buf.source === "local-webkit") ? "📁 " : "";
+      var srcIcon = (buf.source === "local-fsa" || buf.source === "local-webkit") ? '<span data-icon="folder"></span> ' : "";
       chip.innerHTML = (buf.dirty ? '<span class="dot"></span>' : '') + '<span>' + srcIcon + name + (buf.isNew ? " (new)" : "") + '</span>';
       var x = document.createElement("span");
-      x.className = "x"; x.textContent = "✕";
+      x.className = "x"; x.innerHTML = '<span data-icon="x"></span>';
       x.addEventListener("click", function(e){ e.stopPropagation(); closeTab(buf.id); });
       chip.appendChild(x);
       chip.addEventListener("click", function(){ if (buf.id !== activeId) switchToBuffer(buf.id); });
@@ -868,7 +871,7 @@
   var localAllFiles = [];
   function finishLocalConnect(paths, rootName){
     localAllFiles = paths.sort();
-    els.localConnectBtn.textContent = "📁 " + rootName;
+    els.localConnectBtn.innerHTML = '<span data-icon="folder"></span> ' + rootName;
     els.localBreadcrumb.style.display = "block";
     els.localFileFilter.style.display = "block";
     renderLocalBreadcrumb();
@@ -909,7 +912,7 @@
     rows.forEach(function(r){
       var row = document.createElement("div");
       row.className = "row-item";
-      row.innerHTML = '<span>' + (r.type==="dir"?"📁":"📄") + '</span><span class="nm">' + r.name + "</span>";
+      row.innerHTML = '<span data-icon="' + (r.type==="dir"?"folder":"file") + '"></span><span class="nm">' + r.name + "</span>";
       row.addEventListener("click", function(){
         if (r.type === "dir"){ localCurrentPath = r.path; renderLocalBreadcrumb(); renderLocalFileTree(); }
         else openLocalFileInEditor(r.path);
@@ -1382,11 +1385,21 @@
   });
 
   // ---------------- Boot ----------------
+  // Optimistic: a cached token shows the editor INSTANTLY (no spinner/connect
+  // flash) since this reloads from scratch on every hub tab switch by design.
+  // Identity/validity is confirmed quietly in the background instead.
   var savedToken = null;
   try{ savedToken = localStorage.getItem(TOKEN_KEY); }catch(e){}
   if (savedToken){
-    showScreen("loading");
-    connectWithToken(savedToken);
+    gh.token = savedToken;
+    showScreen("app");
+    loadRepos();
+    fetch(API + "/user", { headers: { Authorization: "token " + savedToken } })
+      .then(function(r){ if (!r.ok) throw new Error("invalid"); return r.json(); })
+      .catch(function(){
+        showScreen("connect");
+        setConnectStatus("Your saved token seems to be invalid or expired — please reconnect.", "err");
+      });
   } else {
     showScreen("connect");
   }
