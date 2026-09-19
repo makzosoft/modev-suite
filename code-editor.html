@@ -19,6 +19,13 @@
     border-radius:6px; padding:7px 9px; font-size:13px; outline:none;
   }
   button{cursor:pointer;}
+  label.btn-like{
+    background:var(--panel-2); color:var(--text); border:1px solid var(--border);
+    border-radius:6px; padding:7px 9px; font-size:13px; cursor:pointer;
+    display:inline-flex; align-items:center; justify-content:center; gap:4px;
+  }
+  label.btn-like:active{transform:scale(.93);}
+  label.btn-like.small{padding:5px 8px; font-size:12px;}
   button.primary{background:var(--accent-grad); border-color:transparent; color:#fff; font-weight:600;}
   button.small{padding:5px 8px; font-size:12px;}
   button.icon{width:32px; height:32px; padding:0; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
@@ -142,14 +149,24 @@
   #breadcrumb span:last-child{color:var(--muted); cursor:default;}
   #fileActions{display:flex; gap:6px; padding:8px; border-bottom:1px solid var(--border);}
   .row{display:flex; gap:8px; align-items:center;}
-  #sourceTabs{display:flex; gap:4px; padding:8px; border-bottom:1px solid var(--border);}
+  #sourceTabs{display:flex; gap:4px; padding:8px; border-bottom:1px solid var(--border); flex-shrink:0;}
   .src-tab{flex:1; padding:7px 6px; font-size:11.5px; border-radius:6px;}
   .src-tab.active{background:var(--accent-grad); border-color:transparent; color:#fff; font-weight:600;}
+  #ghSourcePane, #localSourcePane{flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden;}
+  #ghConnectedArea{flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden;}
+  #ghNotConnected{flex-shrink:0; overflow-y:auto;}
   #localFileTree .row-item, #fileTree .row-item{position:relative;}
   .local-writable-badge{font-size:9.5px; color:var(--good); margin-left:4px;}
+  #fileActions{flex-shrink:0;}
   #fileActions button{flex:1; font-size:11.5px; padding:6px 4px;}
-  #fileFilter{margin:8px 8px 0;}
-  #fileTree{flex:1; overflow-y:auto; padding:6px;}
+  #fileFilter{margin:8px 8px 0; flex-shrink:0;}
+  #fileTree{flex:1; min-height:0; overflow-y:auto; padding:6px;}
+  #localConnectRow{flex-shrink:0;}
+  #localFileActions{flex-shrink:0;}
+  #localBreadcrumb{flex-shrink:0;}
+  #localFileFilter{margin:0 8px 8px; flex-shrink:0;}
+  #localStatus{flex-shrink:0;}
+  #localFileTree{flex:1; min-height:0; overflow-y:auto; padding:6px;}
   .row-item{display:flex; align-items:center; gap:6px; padding:9px 8px; border-radius:8px; margin-bottom:2px; font-size:13px; cursor:pointer;}
   .row-item:hover{background:var(--panel-2);}
   .row-item.active{background:var(--accent); color:#fff;}
@@ -245,23 +262,7 @@
 </head>
 <body>
 
-<div id="loadingScreen"><div class="spinner"></div><span>Checking for a saved GitHub connection…</span></div>
-
-<div id="connectScreen">
-  <h2>Connect to GitHub</h2>
-  <p style="color:var(--muted);font-size:13px;">Uses the same Personal Access Token approach as the GitHub tab.</p>
-  <ol>
-    <li>Go to <code>github.com/settings/tokens</code></li>
-    <li>Generate a token with repo access</li>
-    <li>Paste it below — stored only in this browser</li>
-  </ol>
-  <div id="tokenRow">
-    <input id="tokenInput" type="password" placeholder="ghp_xxxxxxxxxxxx" spellcheck="false" autocapitalize="off">
-    <button id="showTokenBtn" class="small"><span data-icon="eye"></span></button>
-    <button id="connectBtn" class="primary">Connect</button>
-  </div>
-  <div id="connectStatus"></div>
-</div>
+<body>
 
 <div id="app">
   <div id="topbar">
@@ -301,24 +302,48 @@
     <div id="fileDrawerBackdrop"></div>
     <div id="fileDrawer">
       <div id="sourceTabs">
-        <button id="sourceTabGh" class="src-tab active"><span data-icon="octopus"></span> GitHub</button>
-        <button id="sourceTabLocal" class="src-tab"><span data-icon="folder"></span> Local folder</button>
+        <button id="sourceTabGh" class="src-tab"><span data-icon="octopus"></span> GitHub</button>
+        <button id="sourceTabLocal" class="src-tab active"><span data-icon="folder"></span> Local folder</button>
       </div>
-      <div id="ghSourcePane">
-        <div id="breadcrumb"></div>
-        <div id="fileActions">
-          <button id="newFileBtn">＋ File</button>
-          <button id="newFolderBtn">＋ Folder</button>
+      <div id="ghSourcePane" style="display:none;">
+        <div id="ghNotConnected" style="padding:14px;">
+          <p style="color:var(--muted);font-size:12px;">Only affects this tab — local folder editing works without it.</p>
+          <ol style="color:var(--muted); font-size:12px; padding-left:18px; margin:8px 0;">
+            <li>Go to <code>github.com/settings/tokens</code></li>
+            <li>Generate a token with repo access</li>
+            <li>Paste it below</li>
+          </ol>
+          <div id="tokenRow" class="row">
+            <input id="tokenInput" type="password" placeholder="ghp_xxxxxxxxxxxx" spellcheck="false" autocapitalize="off">
+            <button id="showTokenBtn" class="small"><span data-icon="eye"></span></button>
+          </div>
+          <button id="connectBtn" class="primary" style="width:100%; margin-top:8px;">Connect</button>
+          <div id="connectStatus" style="margin-top:8px; font-size:12.5px;"></div>
         </div>
-        <input id="fileFilter" placeholder="Filter files…">
-        <div id="fileTree"></div>
+        <div id="ghConnectedArea" style="display:none;">
+          <div id="breadcrumb"></div>
+          <div id="fileActions">
+            <button id="newFileBtn"><span data-icon="plus"></span> File</button>
+            <button id="newFolderBtn"><span data-icon="plus"></span> Folder</button>
+          </div>
+          <input id="fileFilter" placeholder="Filter files…">
+          <div id="fileTree"></div>
+        </div>
       </div>
       <div id="localSourcePane" style="display:none;">
         <div id="localConnectRow" class="row" style="padding:8px;">
-          <button id="localConnectBtn"><span data-icon="folder"></span> Select folder</button>
+          <button id="localConnectBtn" style="display:none;"><span data-icon="folder"></span> Select folder</button>
+          <label id="localConnectLabel" class="btn-like" for="localFolderInput" style="display:none;"><span data-icon="folder"></span> Select folder</label>
           <input id="localFolderInput" type="file" webkitdirectory directory multiple style="display:none;">
         </div>
+        <div class="row" style="padding:0 8px 8px;">
+          <label id="localFilesFallbackLabel" class="btn-like small" for="localFilesFallbackInput" style="width:100%; text-align:center;"><span data-icon="file"></span> Or select individual files instead</label>
+          <input id="localFilesFallbackInput" type="file" multiple style="display:none;">
+        </div>
         <div id="localBreadcrumb" style="display:none; padding:8px 10px; font-size:11.5px; color:var(--muted); border-bottom:1px solid var(--border); overflow-x:auto; white-space:nowrap;"></div>
+        <div id="localFileActions" style="display:none; padding:8px;">
+          <button id="newLocalFileBtn" style="width:100%;"><span data-icon="plus"></span> New file here</button>
+        </div>
         <input id="localFileFilter" placeholder="Filter files…" style="display:none;">
         <div id="localFileTree"></div>
         <p id="localStatus" style="font-size:11px; color:var(--muted); padding:0 10px;"></p>
@@ -403,6 +428,8 @@
    "drawerToggle","repoSelect","branchSelect","fileLabel","fontDown","fontUp","findBtn","formatBtn","saveBtn","topStatus",
    "tabsBar","fileDrawerBackdrop","fileDrawer","breadcrumb","fileActions","newFileBtn","newFolderBtn","fileFilter","fileTree",
    "sourceTabGh","sourceTabLocal","ghSourcePane","localSourcePane",
+   "ghNotConnected","ghConnectedArea",
+   "localConnectLabel","localFilesFallbackLabel","localFilesFallbackInput","localFileActions","newLocalFileBtn",
    "localConnectBtn","localFolderInput","localBreadcrumb","localFileFilter","localFileTree","localStatus",
    "editorHost","emptyEditor","quickbar","emmetBtn","undoBtn","redoBtn",
    "moreBtn","moreBackdrop","moreDrawer","moreClose","newRepoBtn",
@@ -413,9 +440,11 @@
   ].forEach(function(id){ els[id] = document.getElementById(id); });
 
   function showScreen(name){
-    els.loadingScreen.style.display = name === "loading" ? "flex" : "none";
-    els.connectScreen.style.display = name === "connect" ? "block" : "none";
-    els.app.classList.toggle("show", name === "app");
+    els.loadingScreen.style.display = "none"; // app is never gated behind a loading/connect screen anymore
+    els.connectScreen.style.display = "none";
+    els.app.classList.add("show");
+    if (name === "ghConnected"){ els.ghNotConnected.style.display = "none"; els.ghConnectedArea.style.display = "block"; }
+    else if (name === "ghDisconnected"){ els.ghNotConnected.style.display = "block"; els.ghConnectedArea.style.display = "none"; }
   }
 
   var TOKEN_KEY = "ghUploader.token"; // shared name with the GitHub tab, reused if the browser shares storage
@@ -456,12 +485,12 @@
         gh.token = token;
         try{ localStorage.setItem(TOKEN_KEY, token); }catch(e){}
         setConnectStatus("Connected as " + user.login, "ok");
-        showScreen("app");
+        showScreen("ghConnected");
         loadRepos();
       })
       .catch(function(err){
         setConnectStatus(err.message, "err");
-        showScreen("connect");
+        showScreen("ghDisconnected");
       });
   }
   els.connectBtn.addEventListener("click", function(){
@@ -808,12 +837,12 @@
     els.localSourcePane.style.display = "block"; els.ghSourcePane.style.display = "none";
   });
 
-  function resolveLocalHandleByPath(dirHandle, path){
+  function resolveLocalHandleByPath(dirHandle, path, create){
     var parts = path.split("/").filter(Boolean);
     var p = Promise.resolve(dirHandle);
     parts.forEach(function(part, i){
       p = p.then(function(handle){
-        return (i === parts.length - 1) ? handle.getFileHandle(part) : handle.getDirectoryHandle(part);
+        return (i === parts.length - 1) ? handle.getFileHandle(part, create ? {create:true} : undefined) : handle.getDirectoryHandle(part, create ? {create:true} : undefined);
       });
     });
     return p;
@@ -825,19 +854,17 @@
   }
 
   var supportsFSAccessLocal = typeof window.showDirectoryPicker === "function";
+  if (supportsFSAccessLocal){ els.localConnectBtn.style.display = ""; }
+  else { els.localConnectLabel.style.display = ""; }
   els.localConnectBtn.addEventListener("click", function(){
-    if (supportsFSAccessLocal){
-      window.showDirectoryPicker().then(function(handle){
-        localDirHandle = handle; localFileMap = null; localRootName = handle.name;
-        els.localStatus.textContent = "Scanning…";
-        var results = [];
-        walkLocalDirHandle(handle, "", 0, results).then(function(){
-          finishLocalConnect(results, handle.name);
-        });
-      }).catch(function(){});
-    } else {
-      els.localFolderInput.click();
-    }
+    window.showDirectoryPicker().then(function(handle){
+      localDirHandle = handle; localFileMap = null; localRootName = handle.name;
+      els.localStatus.textContent = "Scanning…";
+      var results = [];
+      walkLocalDirHandle(handle, "", 0, results).then(function(){
+        finishLocalConnect(results, handle.name);
+      });
+    }).catch(function(){});
   });
   function walkLocalDirHandle(dirHandle, relPath, depth, results){
     if (depth > 8) return Promise.resolve();
@@ -868,11 +895,24 @@
     var editablePaths = Object.keys(localFileMap).filter(function(p){ return EDITABLE_EXT.test(p); });
     finishLocalConnect(editablePaths, rootName);
   });
+  // Plain multi-file picker fallback — some Android browsers don't reliably support the
+  // webkitdirectory attribute at all; this is the most universally-supported file input there is.
+  els.localFilesFallbackInput.addEventListener("change", function(){
+    var files = Array.prototype.slice.call(els.localFilesFallbackInput.files || []);
+    if (!files.length) return;
+    localDirHandle = null; localFileMap = localFileMap || {};
+    files.forEach(function(f){ localFileMap[f.name] = f; });
+    var editablePaths = Object.keys(localFileMap).filter(function(p){ return EDITABLE_EXT.test(p); });
+    finishLocalConnect(editablePaths, "selected files");
+  });
   var localAllFiles = [];
   function finishLocalConnect(paths, rootName){
     localAllFiles = paths.sort();
-    els.localConnectBtn.innerHTML = '<span data-icon="folder"></span> ' + rootName;
+    var label = '<span data-icon="folder"></span> ' + rootName;
+    els.localConnectBtn.innerHTML = label;
+    els.localConnectLabel.innerHTML = label;
     els.localBreadcrumb.style.display = "block";
+    els.localFileActions.style.display = "block";
     els.localFileFilter.style.display = "block";
     renderLocalBreadcrumb();
     renderLocalFileTree();
@@ -943,15 +983,18 @@
   }
 
   function saveLocalFsa(buf, content){
-    return resolveLocalHandleByPath(localDirHandle, buf.path)
+    return resolveLocalHandleByPath(localDirHandle, buf.path, buf.isNew)
       .then(function(fh){ return fh.createWritable(); })
       .then(function(writable){ return writable.write(content).then(function(){ return writable.close(); }); })
       .then(function(){
         buf.dirty = false;
+        if (buf.isNew && localAllFiles.indexOf(buf.path) === -1) localAllFiles.push(buf.path);
+        buf.isNew = false;
         try{ localStorage.removeItem(draftKey(buf)); }catch(e){}
         els.fileLabel.classList.remove("dirty");
         renderTabs();
         setStatus("Saved to disk ✓", "ok");
+        renderLocalFileTree();
       });
   }
   function saveLocalWebkitDownload(buf, content){
@@ -981,6 +1024,22 @@
     setStatus("New file — tap Save to create it on GitHub", "ok");
     closeDrawer();
   });
+
+  els.newLocalFileBtn.addEventListener("click", function(){
+    var name = prompt("New file path, relative to /" + (localCurrentPath || "") + ":", "");
+    if (!name) return;
+    var fullPath = (localCurrentPath ? localCurrentPath + "/" : "") + name.replace(/^\/+/, "");
+    var existing = buffers.find(function(b){ return b.path === fullPath && b.source !== "github"; });
+    if (existing){ switchToBuffer(existing.id); closeDrawer(); return; }
+    var source = localDirHandle ? "local-fsa" : "local-webkit";
+    var buf = { id: bufIdSeq++, path: fullPath, ext: extOf(fullPath), isNew: true, dirty: true, draftTimer: null, source: source };
+    buf.state = EditorState.create({ doc: "", extensions: extensionsFor(buf) });
+    buffers.push(buf);
+    switchToBuffer(buf.id);
+    setStatus(source === "local-fsa" ? "New file — tap Save to create it" : "New file — tap Save to download it, then add it to your folder manually", "ok");
+    closeDrawer();
+  });
+
   els.newFolderBtn.addEventListener("click", function(){
     var name = prompt("New folder name, inside /" + (gh.path || "") + ":", "");
     if (!name) return;
@@ -1385,23 +1444,27 @@
   });
 
   // ---------------- Boot ----------------
-  // Optimistic: a cached token shows the editor INSTANTLY (no spinner/connect
-  // flash) since this reloads from scratch on every hub tab switch by design.
-  // Identity/validity is confirmed quietly in the background instead.
+  // The app itself is never gated — local folder editing needs no GitHub
+  // connection at all. If a GitHub token is cached, that pane connects
+  // instantly and quietly in the background; otherwise the GitHub pane
+  // just shows its own inline "not connected" prompt, and Local folder
+  // (the default tab) is immediately usable either way.
   var savedToken = null;
   try{ savedToken = localStorage.getItem(TOKEN_KEY); }catch(e){}
   if (savedToken){
     gh.token = savedToken;
-    showScreen("app");
+    showScreen("ghConnected");
     loadRepos();
+    var savedGhState = loadEditorState();
+    if (savedGhState.owner && savedGhState.repo) els.sourceTabGh.click();
     fetch(API + "/user", { headers: { Authorization: "token " + savedToken } })
       .then(function(r){ if (!r.ok) throw new Error("invalid"); return r.json(); })
       .catch(function(){
-        showScreen("connect");
+        showScreen("ghDisconnected");
         setConnectStatus("Your saved token seems to be invalid or expired — please reconnect.", "err");
       });
   } else {
-    showScreen("connect");
+    showScreen("ghDisconnected");
   }
 </script>
 
