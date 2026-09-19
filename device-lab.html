@@ -36,6 +36,12 @@
     background:var(--panel-2); color:var(--text); border:1px solid var(--border);
     border-radius:6px; padding:6px 8px; font-size:13px; outline:none;
   }
+  label.btn-like{
+    background:var(--panel-2); color:var(--text); border:1px solid var(--border);
+    border-radius:6px; padding:6px 8px; font-size:13px; cursor:pointer;
+    display:inline-flex; align-items:center; justify-content:center; gap:4px;
+  }
+  label.btn-like:active{transform:scale(.93);}
   input:focus,select:focus{border-color:var(--accent);}
   #pathInput{width:170px;}
   #pageSelect{max-width:200px;}
@@ -216,8 +222,13 @@
     <div class="panel-section-label acc-head">Source <span class="acc-chevron">▾</span></div>
     <div class="acc-body"><div class="acc-body-inner">
       <div class="row">
-        <button id="folderBtn" title="Select the project folder to auto-list its HTML pages"><span data-icon="folder"></span> Select folder</button>
+        <button id="folderBtn" style="display:none;" title="Select the project folder to auto-list its HTML pages"><span data-icon="folder"></span> Select folder</button>
+        <label id="folderBtnLabel" class="btn-like" for="folderInput" style="display:none;" title="Select the project folder to auto-list its HTML pages"><span data-icon="folder"></span> Select folder</label>
         <button id="dropHint" class="icon" title="You can also drag & drop a folder or files here (desktop)">⤵</button>
+      </div>
+      <div class="row">
+        <label id="filesFallbackLabel" for="filesFallbackInput" class="btn-like small" style="width:100%; text-align:center;"><span data-icon="file"></span> Or select individual files instead</label>
+        <input id="filesFallbackInput" type="file" multiple style="display:none;">
       </div>
       <select id="pageSelect" title="Pages found in the connected folder">
         <option value="">— no folder connected —</option>
@@ -360,7 +371,7 @@
   ];
 
   var els = {};
-  ["folderBtn","folderInput","dropHint","pageSelect","pathInput","knownPaths","loadBtn","reloadBtn","reloadBtnMobile",
+  ["folderBtn","folderBtnLabel","filesFallbackLabel","filesFallbackInput","folderInput","dropHint","pageSelect","pathInput","knownPaths","loadBtn","reloadBtn","reloadBtnMobile",
    "deviceSelect","widthInput","heightInput","rotateBtn","zoomOut","zoomIn","zoomLabel","autoFit","addToGrid",
    "stage","frameWrap","frameLabel","device","previewFrame","empty","status",
    "controlsPanel","drawerBackdrop","menuBtn","closeDrawerBtn","topbarTitle","topbarPage","topbarDims",
@@ -374,6 +385,8 @@
   var localDirHandle = null;  // FileSystemDirectoryHandle, when connected via the desktop folder picker
   var localFileMap = null;    // { relativePath: File }, when connected via <input webkitdirectory> (Android)
   var SKIP_DIRS = /^(node_modules|\.git|\.vscode|\.idea|dist|build|\.next|\.cache|coverage)$/i;
+  // Not HTML-only: any of these can be opened and shown something meaningful for.
+  var PREVIEWABLE_EXT = /\.(html?|css|js|mjs|json|md|markdown|txt|svg|png|jpe?g|gif|webp|ico|bmp|mp4|webm|mov|pdf)$/i;
 
   // ---------------- persistence helpers ----------------
   function idbOpen(){
@@ -477,6 +490,12 @@
 
   // ---------------- discovery method 1: File System Access API (desktop Chrome/Edge) ----------------
   var supportsFSAccess = typeof window.showDirectoryPicker === "function";
+  // Use a real <button> that calls showDirectoryPicker() where supported; everywhere else, use a
+  // native <label for="folderInput"> instead of a JS-triggered .click() on a hidden file input —
+  // some Android browsers don't reliably support triggering a file picker via synthetic .click(),
+  // but a label's native browser-guaranteed behavior always works.
+  if (supportsFSAccess){ els.folderBtn.style.display = ""; }
+  else { els.folderBtnLabel.style.display = ""; }
 
   function walkDirHandle(dirHandle, relPath, depth, results){
     if (depth > 6) return Promise.resolve();
@@ -491,7 +510,7 @@
           if (SKIP_DIRS.test(name)) return Promise.resolve();
           return walkDirHandle(handle, relPath ? relPath+"/"+name : name, depth+1, results);
         }
-        if (handle.kind === "file" && /\.html?$/i.test(name)){
+        if (handle.kind === "file" && PREVIEWABLE_EXT.test(name)){
           results.push(relPath ? relPath+"/"+name : name);
         }
         return Promise.resolve();
@@ -519,16 +538,38 @@
       var rel = (f.webkitRelativePath || f.name).split("/").slice(1).join("/") || f.name;
       localFileMap[rel] = f;
     });
-    var htmlPaths = Object.keys(localFileMap).filter(function(p){ return /\.html?$/i.test(p); });
+    var htmlPaths = Object.keys(localFileMap).filter(function(p){ return PREVIEWABLE_EXT.test(p); });
     finalizeDiscoveredFiles(htmlPaths, rootName);
+  });
+
+  // Plain multi-file picker — the most universally-supported file input there is, for
+  // browsers where the folder-picker attribute silently doesn't work (this varies across
+  // Android OEM browsers and in-app WebViews in ways we can't reliably detect in advance).
+  // No folder structure is preserved, but it at least gets something previewable when the
+  // other two methods produce nothing.
+  els.filesFallbackInput.addEventListener("change", function(){
+    var files = Array.prototype.slice.call(els.filesFallbackInput.files || []);
+    if (!files.length) return;
+    localDirHandle = null;
+    localFileMap = localFileMap || {};
+    files.forEach(function(f){ localFileMap[f.name] = f; });
+    var previewable = Object.keys(localFileMap).filter(function(p){ return PREVIEWABLE_EXT.test(p); });
+    finalizeDiscoveredFiles(previewable, "selected files");
   });
 
   // ---------------- discovery method 3: drag & drop (desktop) ----------------
   function walkEntry(entry, relPath, results){
     return new Promise(function(resolve){
       if (entry.isFile){
-        if (/\.html?$/i.test(entry.name)) results.push(relPath ? relPath+"/"+entry.name : entry.name);
-        entry.file ? entry.file(function(){ resolve(); }, function(){ resolve(); }) : resolve();
+        var fullPath = relPath ? relPath+"/"+entry.name : entry.name;
+        entry.file(function(file){
+          if (PREVIEWABLE_EXT.test(entry.name)){
+            results.push(fullPath);
+            localFileMap = localFileMap || {};
+            localFileMap[fullPath] = file;
+          }
+          resolve();
+        }, function(){ resolve(); });
       } else if (entry.isDirectory){
         if (SKIP_DIRS.test(entry.name)){ resolve(); return; }
         var reader = entry.createReader();
@@ -560,9 +601,29 @@
     }
     if (!entries.length) return;
     var results = [];
+    localDirHandle = null;
+    localFileMap = {};
     var rootName = entries.length === 1 ? entries[0].name : "dropped files";
     Promise.all(entries.map(function(entry){ return walkEntry(entry, "", results); }))
-      .then(function(){ finalizeDiscoveredFiles(stripCommonRoot(results), rootName); });
+      .then(function(){
+        var stripped = stripCommonRoot(results);
+        // localFileMap was built with full (unstripped) paths as keys; re-key it to match
+        // the stripped paths so getLocalBlob(path) can actually find the content later.
+        if (stripped.length === results.length){
+          var firstFullSeg = results.length ? results[0].split("/")[0] : null;
+          var allShareRoot = firstFullSeg && results.every(function(p){ return p.split("/")[0] === firstFullSeg; });
+          if (allShareRoot){
+            var reKeyed = {};
+            Object.keys(localFileMap).forEach(function(fullPath){
+              var idx = fullPath.indexOf("/");
+              var strippedKey = idx === -1 ? fullPath : fullPath.slice(idx + 1);
+              reKeyed[strippedKey] = localFileMap[fullPath];
+            });
+            localFileMap = reKeyed;
+          }
+        }
+        finalizeDiscoveredFiles(stripped, rootName);
+      });
   }
   ["dragenter","dragover"].forEach(function(evt){
     window.addEventListener(evt, function(e){
@@ -580,16 +641,12 @@
   });
 
   function connectFolder(){
-    if (supportsFSAccess){
-      window.showDirectoryPicker().then(function(handle){
-        idbSet("projectDir", handle);
-        return connectHandle(handle);
-      }).catch(function(err){
-        if (err && err.name !== "AbortError") setStatus("Couldn't read that folder: " + err.message, true);
-      });
-    } else {
-      els.folderInput.click();
-    }
+    window.showDirectoryPicker().then(function(handle){
+      idbSet("projectDir", handle);
+      return connectHandle(handle);
+    }).catch(function(err){
+      if (err && err.name !== "AbortError") setStatus("Couldn't read that folder: " + err.message, true);
+    });
   }
   function tryReconnectSilently(){
     if (!supportsFSAccess) return;
@@ -688,6 +745,31 @@
         return new TextDecoder("utf-8").decode(bytes);
       });
   }
+  var GH_MIME_BY_EXT = { png:"image/png", jpg:"image/jpeg", jpeg:"image/jpeg", gif:"image/gif", webp:"image/webp", svg:"image/svg+xml", ico:"image/x-icon", bmp:"image/bmp", pdf:"application/pdf" };
+  function ghFetchDataUrl(path){
+    var url = "https://api.github.com/repos/" + gh.owner + "/" + gh.repo + "/contents/" + ghEncodePath(path) + "?ref=" + encodeURIComponent(gh.branch);
+    return fetch(url, { headers: ghHeaders() }).then(function(r){ if (!r.ok) throw new Error("404"); return r.json(); })
+      .then(function(d){
+        var ext = (/\.([a-z0-9]+)$/i.exec(path) || ["",""])[1].toLowerCase();
+        var mime = GH_MIME_BY_EXT[ext] || "application/octet-stream";
+        return "data:" + mime + ";base64," + (d.content || "").replace(/\n/g, "");
+      });
+  }
+  function ghInlineCssUrls(cssText, basePath){
+    var fetches = [];
+    var out = cssText.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/gi, function(m, q, url){
+      if (/^(data:|https?:)/i.test(url)) return m;
+      var resolved = ghResolveRelative(basePath, url);
+      if (!resolved) return m;
+      var idx = fetches.length;
+      fetches.push(ghFetchDataUrl(resolved).then(function(durl){ return "url(" + durl + ")"; }).catch(function(){ return m; }));
+      return "@@GHCSSURL" + idx + "@@";
+    });
+    return Promise.all(fetches).then(function(parts){
+      parts.forEach(function(p, i){ out = out.replace("@@GHCSSURL" + i + "@@", p); });
+      return out;
+    });
+  }
   function ghBuildInlinedHtml(rawHtml, filePath){
     var html2 = rawHtml;
     var fetches = [];
@@ -695,7 +777,12 @@
       var resolved = ghResolveRelative(filePath, href);
       if (!resolved) return m;
       var idx = fetches.length;
-      fetches.push(ghFetchText(resolved).then(function(css){ return "<style>" + css + "</style>"; }).catch(function(){ return "<!-- couldn't load " + href + " -->"; }));
+      fetches.push(
+        ghFetchText(resolved)
+          .then(function(css){ return ghInlineCssUrls(css, resolved); })
+          .then(function(css){ return "<style>" + css + "</style>"; })
+          .catch(function(){ return "<!-- couldn't load " + href + " -->"; })
+      );
       return "@@GHINLINE" + idx + "@@";
     });
     html2 = html2.replace(/<script[^>]+src=["']([^"']+)["'][^>]*><\/script>/gi, function(m, src){
@@ -703,6 +790,13 @@
       if (!resolved) return m;
       var idx = fetches.length;
       fetches.push(ghFetchText(resolved).then(function(js){ return "<script>" + js + "<" + "/script>"; }).catch(function(){ return "<!-- couldn't load " + src + " -->"; }));
+      return "@@GHINLINE" + idx + "@@";
+    });
+    html2 = html2.replace(/<img([^>]*)\ssrc=["']([^"']+)["']([^>]*)>/gi, function(m, pre, src, post){
+      var resolved = ghResolveRelative(filePath, src);
+      if (!resolved) return m;
+      var idx = fetches.length;
+      fetches.push(ghFetchDataUrl(resolved).then(function(durl){ return "<img" + pre + ' src="' + durl + '"' + post + ">"; }).catch(function(){ return m; }));
       return "@@GHINLINE" + idx + "@@";
     });
     return Promise.all(fetches).then(function(parts){
@@ -793,10 +887,48 @@
       })
       .catch(function(err){ els.ghStatus.textContent = err.message; });
   }
+  function ghRenderContent(path){
+    var ext = (/\.([a-z0-9]+)$/i.exec(path) || ["", ""])[1].toLowerCase();
+    if (ext === "html" || ext === "htm") return ghFetchText(path).then(function(raw){ return ghBuildInlinedHtml(raw, path); });
+    if (ext === "md" || ext === "markdown"){
+      return ghFetchText(path).then(function(text){
+        return import("https://esm.sh/marked@18.0.13").then(function(mod){
+          var body = mod.marked.parse(text);
+          return "<!DOCTYPE html><html><head><meta charset='utf-8'><style>body{font-family:-apple-system,sans-serif;max-width:720px;margin:24px auto;padding:0 16px;line-height:1.6;color:#222;}pre{background:#f4f4f4;padding:10px;border-radius:6px;overflow:auto;}code{background:#f4f4f4;padding:1px 4px;border-radius:3px;}img{max-width:100%;}</style></head><body>" + body + "</body></html>";
+        });
+      });
+    }
+    if (/^(png|jpe?g|gif|webp|svg|ico|bmp)$/.test(ext)){
+      return ghFetchDataUrl(path).then(function(durl){
+        return "<!DOCTYPE html><html><body style='margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#fff;'><img src='" + durl + "' style='max-width:100%;max-height:100vh;'></body></html>";
+      });
+    }
+    if (/^(mp4|webm|mov)$/.test(ext)){
+      return ghFetchDataUrl(path).then(function(durl){
+        return "<!DOCTYPE html><html><body style='margin:0;background:#000;'><video src='" + durl + "' controls autoplay style='width:100%;height:100vh;'></video></body></html>";
+      });
+    }
+    return ghFetchText(path).then(function(text){
+      var esc = text.replace(/&/g,"&amp;").replace(/</g,"&lt;");
+      return "<!DOCTYPE html><html><body style='margin:0;background:#1e1e1e;color:#ddd;font-family:ui-monospace,Menlo,monospace;font-size:13px;padding:16px;white-space:pre-wrap;word-break:break-word;'>" + esc + "</body></html>";
+    });
+  }
   function ghLoadFile(path){
     els.ghStatus.textContent = "Loading " + path + "…";
-    ghFetchText(path)
-      .then(function(raw){ return ghBuildInlinedHtml(raw, path); })
+    var ext = (/\.([a-z0-9]+)$/i.exec(path) || ["", ""])[1].toLowerCase();
+    if (ext === "pdf"){
+      ghFetchDataUrl(path).then(function(durl){
+        els.empty.style.display = "none"; els.device.style.display = ""; els.frameLabel.style.display = "";
+        els.iframe.removeAttribute("srcdoc");
+        els.iframe.src = durl;
+        var label = "GitHub: " + gh.repo + "/" + path;
+        els.pathInput.value = label; els.topbarPage.textContent = label;
+        els.ghStatus.textContent = "Loaded " + path;
+        updateLabel();
+      }).catch(function(err){ els.ghStatus.textContent = "Failed: " + err.message; });
+      return;
+    }
+    ghRenderContent(path)
       .then(function(html2){
         els.empty.style.display = "none"; els.device.style.display = ""; els.frameLabel.style.display = "";
         els.iframe.removeAttribute("src");
@@ -815,6 +947,22 @@
 
   function loadPath(path){
     if (!path) return;
+    if (isLocalPath(path)){
+      // A connected local source (File System Access or the folder/file picker) — read the
+      // actual file content and render it, rather than relying on the browser resolving a
+      // relative file:// URL. That relative-path approach only ever worked when the picked
+      // project folder happened to be the exact same folder this tool sits in on disk; picking
+      // any other folder silently produced a blank frame. Reading content directly works no
+      // matter where the folder is.
+      loadLocalContent(path);
+      if (discoveredFiles.indexOf(path) !== -1) els.pageSelect.value = path;
+      els.pathInput.value = path;
+      els.topbarPage.textContent = path;
+      saveState({path:path});
+      rememberKnownPath(path);
+      if (gridActive) renderGrid();
+      return;
+    }
     els.empty.style.display="none"; els.device.style.display=""; els.frameLabel.style.display="";
     setStatus("Loading "+path+" …");
     els.iframe.onload=function(){ setStatus("Loaded "+path); els.status.classList.add("ok"); };
@@ -946,6 +1094,21 @@
     });
     return baseDir.join("/");
   }
+  function inlineCssUrls(cssText, basePath){
+    var fetches = [];
+    var out = cssText.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/gi, function(m, q, url){
+      if (/^(data:|https?:)/i.test(url)) return m;
+      var resolved = resolveRelativeLocal(basePath, url);
+      if (!resolved) return m;
+      var idx = fetches.length;
+      fetches.push(getLocalBlob(resolved).then(blobToDataURL).then(function(durl){ return "url(" + durl + ")"; }).catch(function(){ return m; }));
+      return "@@CSSURL" + idx + "@@";
+    });
+    return Promise.all(fetches).then(function(parts){
+      parts.forEach(function(p, i){ out = out.replace("@@CSSURL" + i + "@@", p); });
+      return out;
+    });
+  }
   function buildLocalInlinedHtml(path){
     return getLocalBlob(path).then(function(blob){ return blob.text(); }).then(function(rawHtml){
       var html2 = rawHtml;
@@ -954,7 +1117,12 @@
         var resolved = resolveRelativeLocal(path, href);
         if (!resolved) return m;
         var idx = fetches.length;
-        fetches.push(getLocalBlob(resolved).then(function(b){ return b.text(); }).then(function(css){ return "<style>" + css + "</style>"; }).catch(function(){ return ""; }));
+        fetches.push(
+          getLocalBlob(resolved).then(function(b){ return b.text(); })
+            .then(function(css){ return inlineCssUrls(css, resolved); })
+            .then(function(css){ return "<style>" + css + "</style>"; })
+            .catch(function(){ return ""; })
+        );
         return "@@LOCALINLINE" + idx + "@@";
       });
       html2 = html2.replace(/<script[^>]+src=["']([^"']+)["'][^>]*><\/script>/gi, function(m, src){
@@ -976,6 +1144,63 @@
         return html2;
       });
     });
+  }
+
+  // ---------------- Non-HTML preview types, and the local-source dispatcher ----------------
+  var IMAGE_EXT_DL = /\.(png|jpe?g|gif|webp|svg|ico|bmp)$/i;
+  var VIDEO_EXT_DL = /\.(mp4|webm|mov)$/i;
+  var MIME_BY_EXT_DL = { png:"image/png", jpg:"image/jpeg", jpeg:"image/jpeg", gif:"image/gif", webp:"image/webp", svg:"image/svg+xml", ico:"image/x-icon", bmp:"image/bmp", mp4:"video/mp4", webm:"video/webm", mov:"video/quicktime" };
+
+  function renderLocalContent(path){
+    var ext = (/\.([a-z0-9]+)$/i.exec(path) || ["", ""])[1].toLowerCase();
+    if (ext === "html" || ext === "htm") return buildLocalInlinedHtml(path);
+    if (ext === "md" || ext === "markdown"){
+      return getLocalBlob(path).then(function(b){ return b.text(); }).then(function(text){
+        return import("https://esm.sh/marked@18.0.13").then(function(mod){
+          var body = mod.marked.parse(text);
+          return "<!DOCTYPE html><html><head><meta charset='utf-8'><style>body{font-family:-apple-system,sans-serif;max-width:720px;margin:24px auto;padding:0 16px;line-height:1.6;color:#222;}pre{background:#f4f4f4;padding:10px;border-radius:6px;overflow:auto;}code{background:#f4f4f4;padding:1px 4px;border-radius:3px;}img{max-width:100%;}</style></head><body>" + body + "</body></html>";
+        });
+      });
+    }
+    if (IMAGE_EXT_DL.test(path)){
+      var mime = MIME_BY_EXT_DL[ext] || "image/*";
+      return getLocalBlob(path).then(blobToDataURL).then(function(durl){
+        return "<!DOCTYPE html><html><body style='margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#fff;'><img src='" + durl + "' style='max-width:100%;max-height:100vh;'></body></html>";
+      });
+    }
+    if (VIDEO_EXT_DL.test(path)){
+      return getLocalBlob(path).then(blobToDataURL).then(function(durl){
+        return "<!DOCTYPE html><html><body style='margin:0;background:#000;'><video src='" + durl + "' controls autoplay style='width:100%;height:100vh;'></video></body></html>";
+      });
+    }
+    // Plain-text fallback for css/js/json/txt/etc — shows the raw content rather than nothing.
+    return getLocalBlob(path).then(function(b){ return b.text(); }).then(function(text){
+      var esc = text.replace(/&/g,"&amp;").replace(/</g,"&lt;");
+      return "<!DOCTYPE html><html><body style='margin:0;background:#1e1e1e;color:#ddd;font-family:ui-monospace,Menlo,monospace;font-size:13px;padding:16px;white-space:pre-wrap;word-break:break-word;'>" + esc + "</body></html>";
+    });
+  }
+
+  function isLocalPath(path){
+    return !!((localDirHandle || localFileMap) && discoveredFiles.indexOf(path) !== -1);
+  }
+  function loadLocalContent(path){
+    els.empty.style.display = "none"; els.device.style.display = ""; els.frameLabel.style.display = "";
+    setStatus("Loading " + path + " …");
+    var ext = (/\.([a-z0-9]+)$/i.exec(path) || ["", ""])[1].toLowerCase();
+    if (ext === "pdf"){
+      getLocalBlob(path).then(function(blob){
+        var url = URL.createObjectURL(blob);
+        els.iframe.removeAttribute("srcdoc");
+        els.iframe.src = url;
+        setStatus("Loaded " + path, "ok");
+      }).catch(function(err){ setStatus("Couldn't load: " + err.message, true); });
+      return;
+    }
+    renderLocalContent(path).then(function(html2){
+      els.iframe.removeAttribute("src");
+      els.iframe.srcdoc = html2;
+      setStatus("Loaded " + path, "ok");
+    }).catch(function(err){ setStatus("Couldn't load: " + err.message, true); });
   }
   function getInlinedHtmlForCapture(){
     if (els.iframe.srcdoc) return Promise.resolve(els.iframe.srcdoc);
