@@ -440,7 +440,9 @@
   ].forEach(function(id){ els[id] = document.getElementById(id); });
 
   function showScreen(name){
-    els.loadingScreen.style.display = "none"; // app is never gated behind a loading/connect screen anymore
+    if (els.loadingScreen)
+        els.loadingScreen.style.display = "none"; // app is never gated behind a loading/connect screen anymore
+    
     els.connectScreen.style.display = "none";
     els.app.classList.add("show");
     if (name === "ghConnected"){ els.ghNotConnected.style.display = "none"; els.ghConnectedArea.style.display = "block"; }
