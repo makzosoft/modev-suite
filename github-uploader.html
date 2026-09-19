@@ -19,6 +19,12 @@
     border-radius:6px; padding:8px 10px; font-size:13px; outline:none;
   }
   button{cursor:pointer;}
+  label.btn-like{
+    background:var(--panel-2); color:var(--text); border:1px solid var(--border);
+    border-radius:6px; padding:8px 10px; font-size:13px; cursor:pointer;
+    display:inline-flex; align-items:center; justify-content:center; gap:4px;
+  }
+  label.btn-like:active{transform:scale(.93);}
   a.icon{
     background:var(--panel-2); color:var(--text); border:1px solid var(--border);
     border-radius:6px; width:32px; height:32px; display:flex; align-items:center; justify-content:center;
@@ -384,7 +390,7 @@
     <div class="panel" id="filesPanel">
       <div class="panel-head"><span data-icon="smartphone"></span><span>Your device</span></div>
       <div class="panel-body">
-        <button id="addFilesBtn"><span data-icon="plus"></span> Choose files from phone</button>
+        <label id="addFilesBtn" class="btn-like" for="fileInput" style="width:100%; text-align:center;"><span data-icon="plus"></span> Choose files from phone</label>
         <input id="fileInput" type="file" multiple style="display:none;">
         <div id="fileList"></div>
         <div id="emptyFiles">No files selected yet. Choose files, then drag a card onto a folder on the left.</div>
@@ -1053,7 +1059,8 @@
   // ------------------------------------------------------------------
   // Local files (right panel)
   // ------------------------------------------------------------------
-  els.addFilesBtn.addEventListener("click", function(){ els.fileInput.click(); });
+  // addFilesBtn is now a native <label for="fileInput">, so no click-forwarding JS is needed —
+  // that's exactly the pattern that silently fails to open a picker on some Android browsers.
   els.fileInput.addEventListener("change", function(){
     Array.prototype.slice.call(els.fileInput.files || []).forEach(function(f){
       state.files.push({ id: fileIdSeq++, file: f, status: "ready", msg: "", extract: /\.zip$/i.test(f.name) });
