@@ -191,10 +191,6 @@
     #fileDrawer.open{transform:translateX(0);}
   }
 
-  #loadingScreen{
-    display:none; align-items:center; justify-content:center; height:100%;
-    flex-direction:column; gap:12px; color:var(--muted); font-size:13px;
-  }
   .spinner{
     width:28px; height:28px; border-radius:50%; border:3px solid var(--border);
     border-top-color:var(--accent); animation:spin .8s linear infinite;
@@ -206,7 +202,6 @@
   button:active{transform:scale(.93);}
   .row-item, .tab-chip{animation:fadeInUp .16s ease both;}
   @keyframes fadeInUp{ from{opacity:0; transform:translateY(5px);} to{opacity:1; transform:translateY(0);} }
-  #connectScreen{animation:fadeInUp .25s ease both;}
   [data-icon]{display:inline-flex; align-items:center; justify-content:center; vertical-align:-3px;}
   [data-icon] svg{width:15px; height:15px;}
 </style>
@@ -260,8 +255,6 @@
 })();
 </script>
 </head>
-<body>
-
 <body>
 
 <div id="app">
@@ -424,7 +417,7 @@
 
   var API = "https://api.github.com";
   var els = {};
-  ["loadingScreen","connectScreen","tokenInput","showTokenBtn","connectBtn","connectStatus","app",
+  ["tokenInput","showTokenBtn","connectBtn","connectStatus","app",
    "drawerToggle","repoSelect","branchSelect","fileLabel","fontDown","fontUp","findBtn","formatBtn","saveBtn","topStatus",
    "tabsBar","fileDrawerBackdrop","fileDrawer","breadcrumb","fileActions","newFileBtn","newFolderBtn","fileFilter","fileTree",
    "sourceTabGh","sourceTabLocal","ghSourcePane","localSourcePane",
@@ -440,10 +433,7 @@
   ].forEach(function(id){ els[id] = document.getElementById(id); });
 
   function showScreen(name){
-    if (els.loadingScreen)
-        els.loadingScreen.style.display = "none"; // app is never gated behind a loading/connect screen anymore
-    
-    els.connectScreen.style.display = "none";
+    // app is never gated behind a loading/connect screen — it's always shown immediately
     els.app.classList.add("show");
     if (name === "ghConnected"){ els.ghNotConnected.style.display = "none"; els.ghConnectedArea.style.display = "block"; }
     else if (name === "ghDisconnected"){ els.ghNotConnected.style.display = "block"; els.ghConnectedArea.style.display = "none"; }
