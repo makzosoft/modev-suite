@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<!-- Only the directives below are safe to set here: this page's own live-preview iframe uses
+     srcdoc with allow-same-origin, which means previewed pages (which may reference arbitrary
+     external CDNs) inherit whatever CSP this document sets. A restrictive script-src/connect-src
+     here would silently break previewing any page that loads external scripts/styles. -->
+<meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; frame-ancestors 'self';">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Code Editor</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, interactive-widget=resizes-content">
+<link rel="stylesheet" href="code-editor.css">
+<script src="icons.js"></script>
+<script src="console-bridge.js"></script>
+</head>
+<body>
+
+<div id="app">
+  <div id="topbar">
+    <button id="drawerToggle" class="icon"><span data-icon="menu"></span></button>
+    <button id="undoBtn" class="icon" title="Undo"><span data-icon="undo"></span></button>
+    <button id="redoBtn" class="icon" title="Redo"><span data-icon="redo"></span></button>
+    <select id="repoSelect"><option value="">Repo…</option></select>
+    <select id="branchSelect"><option value="">Branch…</option></select>
+    <span id="fileLabel">No file open</span>
+    <button id="previewBtn" class="small" title="Live preview (HTML files)"><span data-icon="eye"></span></button>
+    <button id="saveBtn" class="primary small" title="Commit to GitHub"><span data-icon="save"></span> Save</button>
+    <button id="moreBtn" class="small" title="More">⋯</button>
+    <span id="topStatus"></span>
+  </div>
+
+  <div id="moreBackdrop"></div>
+  <div id="moreDrawer">
+    <div class="more-head"><b>More</b><button id="moreClose" class="small">Close</button></div>
+    <div class="more-section">
+      <label class="more-label">Repo</label>
+      <button id="newRepoBtn"><span data-icon="plus"></span> Create new repo</button>
+    </div>
+    <div class="more-section">
+      <label class="more-label">Editor</label>
+      <div class="more-row">
+        <button id="fontDown">A-</button>
+        <button id="fontUp">A+</button>
+        <button id="findBtn"><span data-icon="search"></span> Find &amp; replace</button>
+      </div>
+      <button id="formatBtn"><span data-icon="sparkle"></span> Format with Prettier</button>
+    </div>
+  </div>
+
+  <div id="tabsBar"></div>
+
+  <div id="body">
+    <div id="fileDrawerBackdrop"></div>
+    <div id="fileDrawer">
+      <div id="sourceTabs">
+        <button id="sourceTabGh" class="src-tab"><span data-icon="octopus"></span> GitHub</button>
+        <button id="sourceTabLocal" class="src-tab active"><span data-icon="folder"></span> Local folder</button>
+      </div>
+      <div id="ghSourcePane" style="display:none;">
+        <div id="ghNotConnected" style="padding:14px;">
+          <p style="color:var(--muted);font-size:12px;">Only affects this tab — local folder editing works without it.</p>
+          <ol style="color:var(--muted); font-size:12px; padding-left:18px; margin:8px 0;">
+            <li>Go to <code>github.com/settings/tokens</code></li>
+            <li>Generate a token with repo access</li>
+            <li>Paste it below</li>
+          </ol>
+          <div id="tokenRow" class="row">
+            <input id="tokenInput" type="password" placeholder="ghp_xxxxxxxxxxxx" spellcheck="false" autocapitalize="off">
+            <button id="showTokenBtn" class="small"><span data-icon="eye"></span></button>
+          </div>
+          <button id="connectBtn" class="primary" style="width:100%; margin-top:8px;">Connect</button>
+          <div id="connectStatus" style="margin-top:8px; font-size:12.5px;"></div>
+        </div>
+        <div id="ghConnectedArea" style="display:none;">
+          <div id="breadcrumb"></div>
+          <div id="fileActions">
+            <button id="newFileBtn"><span data-icon="plus"></span> File</button>
+            <button id="newFolderBtn"><span data-icon="plus"></span> Folder</button>
+          </div>
+          <input id="fileFilter" placeholder="Filter files…">
+          <div id="fileTree"></div>
+        </div>
+      </div>
+      <div id="localSourcePane" style="display:flex;">
+        <div id="localConnectRow" class="row" style="padding:8px;">
+          <button id="localConnectBtn" style="display:none;"><span data-icon="folder"></span> Select folder</button>
+          <label id="localConnectLabel" class="btn-like" for="localFolderInput" style="display:none;"><span data-icon="folder"></span> Select folder</label>
+          <input id="localFolderInput" type="file" webkitdirectory directory multiple style="display:none;">
+        </div>
+        <div class="row" style="padding:0 8px 8px;">
+          <label id="localFilesFallbackLabel" class="btn-like small" for="localFilesFallbackInput" style="width:100%; text-align:center;"><span data-icon="file"></span> Or select individual files instead</label>
+          <input id="localFilesFallbackInput" type="file" multiple style="display:none;">
+        </div>
+        <div id="localBreadcrumb" style="display:none; padding:8px 10px; font-size:11.5px; color:var(--muted); border-bottom:1px solid var(--border); overflow-x:auto; white-space:nowrap;"></div>
+        <div id="localFileActions" style="display:none; padding:8px;">
+          <button id="newLocalFileBtn" style="width:100%;"><span data-icon="plus"></span> New file here</button>
+        </div>
+        <input id="localFileFilter" placeholder="Filter files…" style="display:none;">
+        <div id="localFileTree"></div>
+        <p id="localStatus" style="font-size:11px; color:var(--muted); padding:0 10px;"></p>
+      </div>
+    </div>
+    <div id="editorPane">
+      <div id="editorHost"><div id="emptyEditor">Open <span data-icon="menu"></span> and pick a file, or create a new one, to start editing.</div></div>
+      <div id="quickbar">
+        <button data-ins="\t">Tab</button>
+        <button data-ins="{">{ }</button>
+        <button data-ins="(">( )</button>
+        <button data-ins="[">[ ]</button>
+        <button data-ins='"'>" "</button>
+        <button data-ins="'">' '</button>
+        <button data-ins=";">;</button>
+        <button data-ins=":">:</button>
+        <button data-ins="<">&lt;</button>
+        <button data-ins=">">&gt;</button>
+        <button data-ins="/">/</button>
+        <button data-ins="=">=</button>
+        <button id="emmetBtn" title="Expand Emmet abbreviation"><span data-icon="zap"></span>Emmet</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="previewPane">
+  <div id="previewHead">
+    <b id="previewTitle">Live preview</b>
+    <select id="previewDeviceSelect"></select>
+    <button id="previewRefresh" class="icon small" title="Refresh"><span data-icon="refresh"></span></button>
+    <button id="previewCloseBtn" class="icon small" title="Close"><span data-icon="x"></span></button>
+  </div>
+  <div id="previewStage">
+    <div id="previewFrameHolder">
+      <iframe id="previewFrame" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
+      <img id="previewImg" style="display:none;">
+      <video id="previewVideo" controls style="display:none;"></video>
+    </div>
+  </div>
+  <button id="consoleToggle" title="Console & JS REPL">⌘<span class="badge" id="consoleBadge">0</span></button>
+  <div id="consoleWrap">
+    <div id="consoleHead">Console — logs from the preview, plus a JS REPL <button id="consoleClearBtn" class="icon small" style="margin-left:auto;">Clear</button><button id="consoleHideBtn" class="icon small"><span data-icon="x"></span></button></div>
+    <div id="consoleLog"></div>
+    <div id="replRow">
+      <input id="replInput" placeholder="Run JS against the preview…">
+      <button id="replRun" class="small">Run</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="code-editor.js"></script>
+
+</body>
+</html>
