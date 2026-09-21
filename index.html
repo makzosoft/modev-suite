@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none';">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Modev Suite</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="theme-color" content="#0a0e27">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Modev Suite">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
+<link rel="stylesheet" href="hub.css">
+<script src="icons.js"></script>
+</head>
+<body>
+
+<div id="splash">
+  <div class="splash-glow"></div>
+  <div class="splash-tri" style="top:22%; left:28%; border-top-color:#7c3aed; animation-delay:.1s;"></div>
+  <div class="splash-tri" style="top:30%; right:24%; border-top-color:#d727f1; animation-delay:.5s;"></div>
+  <div class="splash-tri" style="bottom:26%; left:34%; border-top-color:#a78bfa; animation-delay:.9s;"></div>
+  <div class="splash-tri" style="bottom:20%; right:30%; border-top-color:#7c3aed; animation-delay:1.3s;"></div>
+  <img id="splashMark" src="icons/logo-mark-trim.png" alt="Modev">
+  <div id="splashWord"><span id="splashModev">Modev</span><span id="splashSuite">SUITE</span></div>
+  <div class="splash-bar"></div>
+</div>
+
+<div id="tabbar">
+  <button class="tab" data-src="code-editor.html" data-label="Code"><span data-icon="code"></span> Code</button>
+  <button class="tab" data-src="device-lab.html" data-label="Device Lab"><span data-icon="smartphone"></span> Lab</button>
+  <button id="consoleBtn" class="tab" title="Debug console"><span data-icon="bug"></span> Bug<span id="consoleBadge">0</span></button>
+  <button class="tab" data-src="github-uploader.html" data-label="GitHub"><span data-icon="octopus"></span> GitHub</button>
+  <button class="tab" data-src="apps-script.html" data-label="Apps Script"><span data-icon="zap"></span> Script</button>
+  <button class="tab" data-src="settings.html" data-label="Settings"><span data-icon="settings"></span> Settings</button>
+</div>
+
+<div id="consoleDrawer">
+  <div id="consoleHead">
+    <b>Debug console — all tools</b>
+    <button id="consoleClear" class="tab" style="padding:5px 10px;">Clear</button>
+    <button id="consoleClose" class="tab" style="padding:5px 10px;">Close</button>
+  </div>
+  <div id="consoleLog"></div>
+</div>
+
+<div id="frameHost">
+  <div id="loading">Loading…</div>
+  <iframe id="toolFrame"></iframe>
+</div>
+
+<script src="hub.js"></script>
+
+</body>
+</html>
