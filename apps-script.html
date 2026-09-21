@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://esm.sh https://accounts.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://esm.sh https://accounts.google.com https://oauth2.googleapis.com https://script.googleapis.com https://www.googleapis.com; frame-src https://accounts.google.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self';">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Apps Script</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, interactive-widget=resizes-content">
+<link rel="stylesheet" href="apps-script.css">
+<script src="icons.js"></script>
+<script src="console-bridge.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+
+
+<div id="connectScreen">
+  <h2>Connect Google Apps Script</h2>
+  <p>This needs a Google Cloud OAuth Client ID (one-time setup, free):</p>
+  <ol>
+    <li>Create a project at <code>console.cloud.google.com</code></li>
+    <li>Enable the <code>Apps Script API</code> and <code>Google Drive API</code></li>
+    <li>Configure the OAuth consent screen (Testing mode, add yourself as a test user)</li>
+    <li>Create an OAuth Client ID (Web application) with this page's origin added to <b>Authorized JavaScript origins</b></li>
+    <li>Paste the Client ID below — it's stored only in this browser</li>
+  </ol>
+  <div id="clientIdRow">
+    <input id="clientIdInput" type="text" placeholder="xxxx.apps.googleusercontent.com" spellcheck="false" autocapitalize="off">
+  </div>
+  <button id="connectBtn" class="primary">Sign in with Google</button>
+  <div id="connectStatus"></div>
+</div>
+
+<div id="app">
+  <div id="topbar">
+    <button id="drawerToggle" class="icon"><span data-icon="menu"></span></button>
+    <button id="undoBtn" class="icon" title="Undo"><span data-icon="undo"></span></button>
+    <button id="redoBtn" class="icon" title="Redo"><span data-icon="redo"></span></button>
+    <button id="findTopBtn" class="icon" title="Find in this file"><span data-icon="search"></span></button>
+    <select id="projectSelect"><option value="">Project…</option></select>
+    <span id="fileLabel">No file open</span>
+    <button id="saveBtn" class="primary small" title="Push all files to this project (Ctrl/Cmd+S)"><span data-icon="save"></span> Save</button>
+    <button id="moreBtn" class="small" title="More">⋯</button>
+    <span id="topStatus"></span>
+  </div>
+
+  <div id="moreBackdrop"></div>
+  <div id="moreDrawer">
+    <div class="more-head"><b>More</b><button id="moreClose" class="small">Close</button></div>
+    <div class="more-section">
+      <label class="more-label">Project</label>
+      <button id="refreshProjectsBtn"><span data-icon="refresh"></span> Refresh project list</button>
+      <button id="newProjectBtn"><span data-icon="plus"></span> New project</button>
+      <a id="openInEditorLink" class="btn-like" href="#" target="_blank" rel="noopener noreferrer" style="display:none;"><span data-icon="link"></span> Open in Apps Script editor</a>
+      <div class="more-row" id="scriptIdRow" style="display:none;">
+        <span id="scriptIdText" style="flex:1; align-self:center; font-size:11px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
+        <button id="copyScriptIdBtn" class="small">Copy ID</button>
+      </div>
+    </div>
+    <div class="more-section">
+      <label class="more-label">File</label>
+      <button id="newFileBtn"><span data-icon="plus"></span> New file</button>
+      <button id="renameFileBtn"><span data-icon="edit"></span> Rename current file</button>
+      <button id="deleteFileBtn"><span data-icon="trash"></span> Delete current file</button>
+    </div>
+    <div class="more-section">
+      <label class="more-label">Editor</label>
+      <div class="more-row">
+        <button id="fontDown">A-</button>
+        <button id="fontUp">A+</button>
+        <button id="findBtn"><span data-icon="search"></span> Find &amp; replace</button>
+      </div>
+    </div>
+    <div class="more-section">
+      <label class="more-label">Account</label>
+      <button id="disconnectBtn"><span data-icon="ban"></span> Disconnect</button>
+    </div>
+  </div>
+
+  <div id="tabsBar"></div>
+
+  <div id="body">
+    <div id="fileDrawerBackdrop"></div>
+    <div id="fileDrawer">
+      <div id="drawerHead"><b>Files</b></div>
+      <input id="fileFilter" placeholder="Filter files…">
+      <div id="fileTree"></div>
+    </div>
+    <div id="editorHost"><div id="emptyEditor">Open <span data-icon="menu"></span> and pick a file, or create a new one, to start editing.</div></div>
+  </div>
+</div>
+
+<div id="newFileBackdrop" class="sheet-backdrop"></div>
+<div id="newFileSheet" class="sheet">
+  <div class="sheet-head"><b>New file</b><button id="newFileCancel" class="small">Cancel</button></div>
+  <div class="sheet-body">
+    <input id="newFileNameInput" placeholder="File name (e.g. Utils)">
+    <div class="tpl-grid" id="tplGrid">
+      <button class="tpl-btn" data-tpl="blank-gs"><span class="tpl-ic" data-icon="code"></span>Blank script</button>
+      <button class="tpl-btn" data-tpl="onOpen"><span class="tpl-ic" data-icon="zap"></span>onOpen trigger</button>
+      <button class="tpl-btn" data-tpl="doGet"><span class="tpl-ic" data-icon="globe"></span>doGet web app</button>
+      <button class="tpl-btn" data-tpl="blank-html"><span class="tpl-ic" data-icon="file"></span>Blank HTML</button>
+      <button class="tpl-btn" data-tpl="blank-json"><span class="tpl-ic" data-icon="settings"></span>Blank JSON</button>
+    </div>
+    <button id="newFileCreate" class="primary" style="width:100%;">Create</button>
+  </div>
+</div>
+
+<div id="diffBackdrop" class="sheet-backdrop"></div>
+<div id="diffSheet" class="sheet">
+  <div class="sheet-head"><b>Files changed since you loaded them</b><button id="diffClose" class="small">Cancel</button></div>
+  <div class="sheet-body" id="diffBody"></div>
+  <div class="sheet-body" style="padding-top:0;">
+    <button id="diffOverwriteBtn" class="primary" style="width:100%;">Overwrite with my version</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script type="module" src="apps-script.js"></script>
+
+</body>
+</html>
