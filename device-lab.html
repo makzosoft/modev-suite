@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<!-- Only the directives below are safe to set here: this page's own live-preview iframe uses
+     srcdoc with a same-origin-capable sandbox, which means previewed pages (which may reference
+     arbitrary external CDNs) inherit whatever CSP this document sets. A restrictive
+     script-src/connect-src here would silently break previewing real-world pages. -->
+<meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; frame-ancestors 'self';">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Device Lab — Responsive Preview</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
+<link rel="stylesheet" href="device-lab.css">
+<script src="icons.js"></script>
+<script src="console-bridge.js"></script>
+</head>
+<body>
+
+<div id="topbar">
+  <button id="menuBtn" class="icon" title="Open controls"><span data-icon="menu"></span></button>
+  <div id="topbarTitle"><b id="topbarPage">No page loaded</b><span id="topbarDims"></span></div>
+  <button id="reloadBtnMobile" class="icon" title="Reload"><span data-icon="refresh"></span></button>
+</div>
+
+<div id="drawerBackdrop"></div>
+
+<div id="controlsPanel">
+  <div class="drawer-handle"></div>
+
+  <div class="panel-section" data-accordion>
+    <div class="panel-section-label acc-head">Source <span class="acc-chevron">▾</span></div>
+    <div class="acc-body"><div class="acc-body-inner">
+      <div class="row">
+        <button id="folderBtn" style="display:none;" title="Select the project folder to auto-list its HTML pages"><span data-icon="folder"></span> Select folder</button>
+        <label id="folderBtnLabel" class="btn-like" for="folderInput" style="display:none;" title="Select the project folder to auto-list its HTML pages"><span data-icon="folder"></span> Select folder</label>
+        <button id="dropHint" class="icon" title="You can also drag & drop a folder or files here (desktop)">⤵</button>
+      </div>
+      <div class="row">
+        <label id="filesFallbackLabel" for="filesFallbackInput" class="btn-like small" style="width:100%; text-align:center;"><span data-icon="file"></span> Or select individual files instead</label>
+        <input id="filesFallbackInput" type="file" multiple style="display:none;">
+      </div>
+      <select id="pageSelect" title="Pages found in the connected folder">
+        <option value="">— no folder connected —</option>
+      </select>
+      <div class="row">
+        <input id="pathInput" type="text" placeholder="or type a path, e.g. index.html" spellcheck="false" list="knownPaths">
+        <button id="loadBtn" class="primary">Load</button>
+      </div>
+      <datalist id="knownPaths"></datalist>
+      <input id="folderInput" type="file" webkitdirectory directory multiple style="display:none;">
+    </div></div>
+  </div>
+
+  <div class="sep"></div>
+
+  <div class="panel-section" data-accordion>
+    <div class="panel-section-label acc-head">Or preview from GitHub <span class="acc-chevron">▾</span></div>
+    <div class="acc-body"><div class="acc-body-inner">
+      <div id="ghConnectRow" class="row">
+        <button id="ghConnectBtn"><span data-icon="link"></span> Connect GitHub</button>
+      </div>
+      <div id="ghBrowseRow" style="display:none;">
+        <div class="row">
+          <select id="ghRepoSelect"><option value="">Repo…</option></select>
+          <select id="ghBranchSelect"><option value="">Branch…</option></select>
+        </div>
+        <div id="ghBreadcrumb" style="font-size:11px;color:var(--muted);padding:4px 0;overflow-x:auto;white-space:nowrap;"></div>
+        <div id="ghFileList" style="max-height:180px;overflow-y:auto;"></div>
+      </div>
+      <div id="ghStatus" style="font-size:11.5px;color:var(--muted);"></div>
+    </div></div>
+  </div>
+
+  <div class="sep"></div>
+
+  <div class="panel-section" data-accordion>
+    <div class="panel-section-label acc-head">Device <span class="acc-chevron">▾</span></div>
+    <div class="acc-body"><div class="acc-body-inner">
+      <div class="row">
+        <select id="deviceSelect"></select>
+        <button id="rotateBtn" class="icon" title="Rotate / swap W and H">⟲</button>
+      </div>
+      <div class="row">
+        <label class="field-label">W</label>
+        <input id="widthInput" class="num" type="number" min="200" max="4000">
+        <label class="field-label">H</label>
+        <input id="heightInput" class="num" type="number" min="200" max="4000">
+      </div>
+      <div class="row">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);">
+          <input id="addToGrid" type="checkbox" style="width:auto;min-height:auto;"> Add current size to grid (max 4)
+        </label>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="sep"></div>
+
+  <div class="panel-section" data-accordion>
+    <div class="panel-section-label acc-head">Zoom <span class="acc-chevron">▾</span></div>
+    <div class="acc-body"><div class="acc-body-inner">
+      <div class="row">
+        <button id="zoomOut" class="icon" title="Zoom out">−</button>
+        <span id="zoomLabel">100%</span>
+        <button id="zoomIn" class="icon" title="Zoom in">+</button>
+        <label style="display:flex;align-items:center;gap:4px;">
+          <input id="autoFit" type="checkbox" style="width:auto;min-height:auto;"> fit
+        </label>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="sep"></div>
+
+  <div class="panel-section" data-accordion>
+    <div class="panel-section-label acc-head">Tool <span class="acc-chevron">▾</span></div>
+    <div class="acc-body"><div class="acc-body-inner">
+      <div class="row">
+        <button id="reloadBtn" class="icon" title="Reload page"><span data-icon="refresh"></span></button>
+        <button id="gridToggleBtn" title="Show devices side by side">⊞ Grid</button>
+        <button id="screenshotBtn" title="Export the current frame as a PNG"><span data-icon="camera"></span></button>
+        <button id="recordBtn" title="Record a short auto-scroll video clip (.webm)"><span data-icon="video"></span></button>
+        <button id="closeDrawerBtn" title="Close">Close</button>
+      </div>
+    </div></div>
+  </div>
+
+  <div id="status"></div>
+</div>
+
+<div id="stage">
+  <div id="frameWrap">
+    <div id="frameLabel"></div>
+    <div id="device">
+      <iframe id="previewFrame"></iframe>
+    </div>
+  </div>
+  <div id="empty" style="display:none;">
+    Tap <b><span data-icon="folder"></span> Select folder</b> and choose the folder this file is in — Device Lab lists every HTML page automatically and opens <code>index.html</code> by default. Desktop browsers can also drag &amp; drop a folder onto this page. Or type a path in the drawer and hit Load.
+  </div>
+</div>
+
+<div id="gridStage" style="display:none;">
+  <div id="gridEmpty">Check "Add current size to grid" for 2–4 sizes, then tap Grid again to compare them side by side.</div>
+  <div id="gridRow"></div>
+</div>
+
+<div id="dropOverlay">Drop folder or HTML files to load</div>
+
+<script src="device-lab.js"></script>
+
+</body>
+</html>
