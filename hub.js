@@ -1,6 +1,6 @@
 (function(){
   "use strict";
-  var tabs = Array.prototype.slice.call(document.querySelectorAll(".tab"));
+  var tabs = Array.prototype.slice.call(document.querySelectorAll(".tab[data-src]"));
   var frame = document.getElementById("toolFrame");
   var loading = document.getElementById("loading");
   var KEY = "hub.state.v1";
