@@ -35,6 +35,14 @@
 
   var TOKEN_KEY = "ghUploader.token";
   var STATE_KEY = "ghUploader.state.v1";
+  var SHARED_REPO_KEY = "modev.sharedRepo.v1";
+  function saveSharedRepo(owner, repo, branch){
+    if (!owner || !repo) return;
+    try{ localStorage.setItem(SHARED_REPO_KEY, JSON.stringify({owner:owner, repo:repo, branch:branch||null})); }catch(e){}
+  }
+  function loadSharedRepo(){
+    try{ return JSON.parse(localStorage.getItem(SHARED_REPO_KEY)) || null; }catch(e){ return null; }
+  }
 
   var state = {
     token: null, username: null, avatar: null,
@@ -47,6 +55,7 @@
   function loadSaved(){ try{ return JSON.parse(localStorage.getItem(STATE_KEY)) || {}; }catch(e){ return {}; } }
   function saveState(){
     try{ localStorage.setItem(STATE_KEY, JSON.stringify({ owner:state.owner, repo:state.repo, branch:state.branch, path:state.path })); }catch(e){}
+    saveSharedRepo(state.owner, state.repo, state.branch);
   }
 
   function setTopStatus(msg, kind){
@@ -159,11 +168,22 @@
         setTopStatus(repos.length + " repos loaded", "ok");
 
         var saved = loadSaved();
-        if (saved.owner && saved.repo){
-          var fullName = saved.owner + "/" + saved.repo;
+        var shared = loadSharedRepo();
+        var targetOwner, targetRepo, targetBranch, targetPath = "";
+        if (shared && shared.owner && shared.repo){
+          targetOwner = shared.owner; targetRepo = shared.repo; targetBranch = shared.branch;
+          // Only reuse this tab's own remembered path if it was left in this SAME
+          // repo — if the repo was switched elsewhere, start fresh at the repo root.
+          if (saved.owner === shared.owner && saved.repo === shared.repo) targetPath = saved.path || "";
+        } else if (saved.owner && saved.repo){
+          targetOwner = saved.owner; targetRepo = saved.repo; targetBranch = saved.branch;
+          targetPath = saved.path || "";
+        }
+        if (targetOwner && targetRepo){
+          var fullName = targetOwner + "/" + targetRepo;
           if (repos.some(function(r){ return r.full_name === fullName; })){
             els.repoSelect.value = fullName;
-            selectRepo(fullName, saved.branch, saved.path || "");
+            selectRepo(fullName, targetBranch, targetPath);
           }
         }
         return repos;
@@ -209,9 +229,14 @@
     var map = getUrlMap(key); map[repoKey()] = url;
     try{ localStorage.setItem(key, JSON.stringify(map)); }catch(e){}
   }
+  function setPagesButtonState(connected){
+    els.publishPagesBtn.style.display = connected ? "none" : "";
+    els.unpublishPagesBtn.style.display = connected ? "" : "none";
+  }
   function refreshPublishLinks(){
     els.visitPagesLink.style.display = "none";
     els.visitVercelLink.style.display = "none";
+    setPagesButtonState(false);
     var vercelMap = getUrlMap("ghUploader.vercelUrls");
     if (vercelMap[repoKey()]){ els.visitVercelLink.href = vercelMap[repoKey()]; els.visitVercelLink.style.display = "flex"; }
     // GitHub Pages: check live, since it can be enabled/disabled outside this tool too.
@@ -222,6 +247,9 @@
           setUrlFor("ghUploader.pagesUrls", data.html_url);
           els.visitPagesLink.href = data.html_url;
           els.visitPagesLink.style.display = "flex";
+          setPagesButtonState(true);
+        } else {
+          setPagesButtonState(false);
         }
       })
       .catch(function(){});
@@ -251,6 +279,7 @@
         setUrlFor("ghUploader.pagesUrls", url);
         els.visitPagesLink.href = url; els.visitPagesLink.style.display = "flex";
         els.publishStatus.textContent = "Live at " + url;
+        setPagesButtonState(true);
         showToast("Published to GitHub Pages", "ok");
       })
       .catch(function(err){
@@ -553,6 +582,7 @@
         try{ localStorage.setItem("ghUploader.pagesUrls", JSON.stringify(map)); }catch(e){}
         els.visitPagesLink.style.display = "none";
         els.publishStatus.textContent = "GitHub Pages turned off.";
+        setPagesButtonState(false);
         showToast("GitHub Pages turned off", "ok");
       })
       .catch(function(err){ els.publishStatus.textContent = "Failed: " + err.message; showToast("Turn off failed", "err"); });
