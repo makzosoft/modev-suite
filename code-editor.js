@@ -52,6 +52,14 @@
 
   var TOKEN_KEY = "ghUploader.token"; // shared name with the GitHub tab, reused if the browser shares storage
   var STATE_KEY = "codeEditor.state.v1";
+  var SHARED_REPO_KEY = "modev.sharedRepo.v1";
+  function saveSharedRepo(owner, repo, branch){
+    if (!owner || !repo) return;
+    try{ localStorage.setItem(SHARED_REPO_KEY, JSON.stringify({owner:owner, repo:repo, branch:branch||null})); }catch(e){}
+  }
+  function loadSharedRepo(){
+    try{ return JSON.parse(localStorage.getItem(SHARED_REPO_KEY)) || null; }catch(e){ return null; }
+  }
   var FONT_KEY = "codeEditor.fontSize";
 
   var gh = { token:null, owner:null, repo:null, branch:null, path:"", filePath:null };
@@ -67,7 +75,10 @@
   function encodeApiPath(p){ return p.split("/").filter(Boolean).map(encodeURIComponent).join("/"); }
   function setStatus(msg, kind){ els.topStatus.textContent = msg||""; els.topStatus.className = kind||""; }
   function setConnectStatus(msg, kind){ els.connectStatus.textContent = msg||""; els.connectStatus.className = kind||""; }
-  function saveEditorState(){ try{ localStorage.setItem(STATE_KEY, JSON.stringify({owner:gh.owner, repo:gh.repo, branch:gh.branch, path:gh.path, filePath:gh.filePath||null})); }catch(e){} }
+  function saveEditorState(){
+    try{ localStorage.setItem(STATE_KEY, JSON.stringify({owner:gh.owner, repo:gh.repo, branch:gh.branch, path:gh.path, filePath:gh.filePath||null})); }catch(e){}
+    saveSharedRepo(gh.owner, gh.repo, gh.branch);
+  }
   function loadEditorState(){ try{ return JSON.parse(localStorage.getItem(STATE_KEY)) || {}; }catch(e){ return {}; } }
   function draftKey(buf){
     if (typeof buf === "string") buf = { path: buf, source: "github" }; // legacy call sites passing a bare path = GitHub
@@ -114,12 +125,25 @@
         renderRepoOptions(repos);
         setStatus(repos.length + " repos", "ok");
         var saved = loadEditorState();
-        if (saved.owner && saved.repo){
-          var full = saved.owner + "/" + saved.repo;
+        var shared = loadSharedRepo();
+        var targetOwner, targetRepo, targetBranch, targetPath = "", targetFilePath = null;
+        if (shared && shared.owner && shared.repo){
+          targetOwner = shared.owner; targetRepo = shared.repo; targetBranch = shared.branch;
+          // Only reuse this tab's own remembered path/file if it was left in this SAME
+          // repo — if the repo was switched elsewhere, start fresh at the repo root.
+          if (saved.owner === shared.owner && saved.repo === shared.repo){
+            targetPath = saved.path || ""; targetFilePath = saved.filePath || null;
+          }
+        } else if (saved.owner && saved.repo){
+          targetOwner = saved.owner; targetRepo = saved.repo; targetBranch = saved.branch;
+          targetPath = saved.path || ""; targetFilePath = saved.filePath || null;
+        }
+        if (targetOwner && targetRepo){
+          var full = targetOwner + "/" + targetRepo;
           if (repos.some(function(r){return r.full_name===full;})){
             els.repoSelect.value = full;
-            pendingFile = saved.filePath || null;
-            selectRepo(full, saved.branch, saved.path || "");
+            pendingFile = targetFilePath;
+            selectRepo(full, targetBranch, targetPath);
           }
         }
         return repos;
