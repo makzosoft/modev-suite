@@ -135,7 +135,7 @@
   #fileDrawerBackdrop.open{display:block;}
   #fileDrawer{
     width:230px; flex-shrink:0; background:var(--panel); border-right:1px solid var(--border);
-    display:flex; flex-direction:column; overflow:hidden;
+    display:flex; flex-direction:column; overflow:hidden; min-height:0;
   }
   #breadcrumb{padding:8px 10px; font-size:11.5px; color:var(--muted); border-bottom:1px solid var(--border); overflow-x:auto; white-space:nowrap;}
   #breadcrumb span{color:var(--accent); cursor:pointer;}
@@ -153,13 +153,13 @@
   #fileActions{flex-shrink:0;}
   #fileActions button{flex:1; font-size:11.5px; padding:6px 4px;}
   #fileFilter{margin:8px 8px 0; flex-shrink:0;}
-  #fileTree{flex:1; min-height:0; overflow-y:auto; padding:6px;}
+  #fileTree{flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:6px; touch-action:pan-y;}
   #localConnectRow{flex-shrink:0;}
   #localFileActions{flex-shrink:0;}
   #localBreadcrumb{flex-shrink:0;}
   #localFileFilter{margin:0 8px 8px; flex-shrink:0;}
   #localStatus{flex-shrink:0;}
-  #localFileTree{flex:1; min-height:0; overflow-y:auto; padding:6px;}
+  #localFileTree{flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:6px; touch-action:pan-y;}
   .row-item{display:flex; align-items:center; gap:6px; padding:9px 8px; border-radius:8px; margin-bottom:2px; font-size:13px; cursor:pointer;}
   .row-item:hover{background:var(--panel-2);}
   .row-item.active{background:var(--accent); color:#fff;}
