@@ -129,6 +129,17 @@
         if (pendingResolve){ pendingResolve(accessToken); pendingResolve = pendingReject = null; }
         setConnectStatus("Signed in.", "ok");
         showApp();
+      },
+      // Fires for popup-level problems the normal callback never sees — the popup was
+      // blocked from opening, or closed before finishing. Without this, those just
+      // vanish silently and the request sits until the 12s timeout. That matters most
+      // at boot, where silent renewal has no user gesture and is very likely to be
+      // blocked: this makes it fail fast instead of leaving "Reconnecting…" up for 12s.
+      error_callback: function(err){
+        var type = (err && err.type) || "unknown";
+        if (pendingReject){ pendingReject(new Error(type)); pendingResolve = pendingReject = null; }
+        setConnectStatus("Sign-in didn't complete (" + type + ").", "err");
+        console.error("Google sign-in error: " + type);
       }
     });
     tokenClientId = clientId;
@@ -140,15 +151,18 @@
   // these scopes); omit it entirely for an explicit, user-clicked sign-in.
   function requestToken(promptMode){
     if (pendingTokenPromise) return pendingTokenPromise;
+    var timer = null;
     pendingTokenPromise = new Promise(function(resolve, reject){
       pendingResolve = resolve; pendingReject = reject;
       try{
         tokenClient.requestAccessToken(promptMode === undefined ? {} : { prompt: promptMode });
       }catch(e){ pendingResolve = pendingReject = null; reject(e); return; }
-      setTimeout(function(){
-        if (pendingReject){ pendingReject(new Error("Sign-in timed out.")); pendingResolve = pendingReject = null; }
+      // Only time out THIS request — a stale timer from an earlier, already-finished
+      // request must never reject a later one that happens to be pending by then.
+      timer = setTimeout(function(){
+        if (pendingReject === reject){ reject(new Error("Sign-in timed out.")); pendingResolve = pendingReject = null; }
       }, 12000);
-    }).finally(function(){ pendingTokenPromise = null; });
+    }).finally(function(){ clearTimeout(timer); pendingTokenPromise = null; });
     return pendingTokenPromise;
   }
 
