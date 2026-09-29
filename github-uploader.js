@@ -70,6 +70,17 @@
   function ghHeaders(){
     return { "Authorization": "token " + state.token, "Accept": "application/vnd.github+json" };
   }
+  // Parses a GitHub API response, but turns a non-2xx into a real, specific Error
+  // (using GitHub's own "message" when there is one) instead of handing the caller an
+  // error-shaped object to choke on — e.g. a 401 body ({message:"Bad credentials"}) is
+  // valid JSON but not the array a caller expects, so forEach() on it would otherwise
+  // throw a confusing "is not a function" TypeError rather than say what went wrong.
+  function ghJson(r){
+    if (r.ok) return r.json();
+    return r.json().catch(function(){ return {}; }).then(function(d){
+      throw new Error(d.message || ("GitHub error " + r.status));
+    });
+  }
   function encodeApiPath(path){
     return path.split("/").filter(Boolean).map(encodeURIComponent).join("/");
   }
@@ -161,7 +172,7 @@
   function loadRepos(){
     setTopStatus("Loading repos…");
     return fetch(API + "/user/repos?per_page=100&sort=updated", { headers: ghHeaders() })
-      .then(function(r){ return r.json(); })
+      .then(ghJson)
       .then(function(repos){
         allRepos = repos;
         renderRepoOptions(repos);
@@ -200,7 +211,7 @@
     state.owner = parts[0]; state.repo = parts[1]; state.path = preferPath || "";
     setTopStatus("Loading branches…");
     fetch(API + "/repos/" + fullName + "/branches?per_page=100", { headers: ghHeaders() })
-      .then(function(r){ return r.json(); })
+      .then(ghJson)
       .then(function(branches){
         els.branchSelect.innerHTML = "";
         branches.forEach(function(b){
@@ -307,7 +318,7 @@
         els.publishStatus.textContent = "Uploading " + blobs.length + " file(s) to Vercel…";
         return Promise.all(blobs.map(function(b){
           return fetch(API + "/repos/" + state.owner + "/" + state.repo + "/git/blobs/" + b.sha, { headers: ghHeaders() })
-            .then(function(r){ return r.json(); })
+            .then(ghJson)
             .then(function(blobData){ return { file: b.path, data: (blobData.content || "").replace(/\n/g, ""), encoding: "base64" }; });
         }));
       })
@@ -329,14 +340,58 @@
         var url = "https://" + deployment.url;
         setUrlFor("ghUploader.vercelUrls", url);
         els.visitVercelLink.href = url; els.visitVercelLink.style.display = "flex";
-        els.publishStatus.textContent = "Deployed: " + url;
-        showToast("Deployed to Vercel", "ok");
+        els.publishStatus.textContent = "Build queued — checking status…";
+        pollVercelDeployment(deployment.id || deployment.uid, token, url, 0);
       })
       .catch(function(err){
         els.publishStatus.textContent = "Vercel deploy failed: " + err.message;
+        console.error("Vercel deploy failed: " + err.message);
         showToast("Vercel deploy failed", "err");
       });
   });
+
+  function pollVercelDeployment(id, token, url, attempt){
+    if (attempt > 24){ // ~60s of polling — after that, stop and point at the dashboard
+      els.publishStatus.textContent = "Still building — check " + url + " in a bit, or view it on vercel.com.";
+      return;
+    }
+    fetch("https://api.vercel.com/v13/deployments/" + id, { headers: { "Authorization": "Bearer " + token } })
+      .then(function(r){
+        if (r.ok) return r.json();
+        // A 401/403/404 here isn't "still building" — it will never resolve on its own
+        // (revoked token, wrong deployment) — so surface it now instead of polling for a minute.
+        return r.json().catch(function(){ return {}; }).then(function(d){
+          var e = new Error((d.error && d.error.message) || ("Vercel error " + r.status));
+          e.fatal = true;
+          throw e;
+        });
+      })
+      .then(function(d){
+        var state = d.readyState || d.status;
+        if (state === "READY"){
+          els.publishStatus.textContent = "Deployed: " + url;
+          showToast("Deployed to Vercel", "ok");
+        } else if (state === "ERROR" || state === "CANCELED"){
+          var msg = d.errorMessage || (d.errorCode ? ("Build failed: " + d.errorCode) : "Build failed on Vercel's side.");
+          els.publishStatus.textContent = "Vercel build failed: " + msg;
+          console.error("Vercel build failed: " + msg);
+          showToast("Vercel build failed", "err");
+        } else {
+          els.publishStatus.textContent = "Building… (" + (state || "in progress") + ")";
+          setTimeout(function(){ pollVercelDeployment(id, token, url, attempt + 1); }, 2500);
+        }
+      })
+      .catch(function(err){
+        if (err && err.fatal){
+          els.publishStatus.textContent = "Couldn't check the deployment: " + err.message;
+          console.error("Vercel status check failed: " + err.message);
+          showToast("Vercel status check failed", "err");
+          return;
+        }
+        // A transient network blip isn't necessarily a deploy failure — keep polling.
+        setTimeout(function(){ pollVercelDeployment(id, token, url, attempt + 1); }, 2500);
+      });
+  }
 
   els.branchSelect.addEventListener("change", function(){
     state.branch = els.branchSelect.value; state.path = "";
@@ -485,7 +540,7 @@
         setTopStatus("Downloading " + blobs.length + " file(s)…");
         return Promise.all(blobs.map(function(b){
           return fetch(API + "/repos/" + state.owner + "/" + state.repo + "/git/blobs/" + b.sha, { headers: ghHeaders() })
-            .then(function(r){ return r.json(); })
+            .then(ghJson)
             .then(function(blobData){
               var binary = atob((blobData.content || "").replace(/\n/g, ""));
               var bytes = Uint8Array.from(binary, function(c){ return c.charCodeAt(0); });
