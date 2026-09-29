@@ -59,15 +59,29 @@
     [/403|rate limit/i, "GitHub API rate limit or missing token permission — wait a bit, or check the token's scope."],
     [/404/i, "Not found — double check the repo, branch, or file path."],
     [/422/i, "GitHub rejected the request content — often means the file already changed remotely; reload and retry."],
+    [/\b400\b/i, "The request was malformed — often a stray character or invalid value in what was sent."],
+    [/\b(500|502|503|504)\b/i, "The server had a problem on its own end — wait a moment and try again; if it keeps happening, the service may be down."],
     [/importing binding name|failed to resolve module|dynamically imported module/i, "A library failed to load from its CDN — check your connection and reload this tool."],
     [/is not defined|cannot read propert(y|ies) of (undefined|null)/i, "Something loaded out of order — reloading this tool usually clears it."],
     [/quota|exceeded the quota/i, "Local storage is full — clear old drafts or unused data."],
     [/origin_mismatch|redirect_uri_mismatch/i, "This page's origin isn't in the OAuth Client ID's Authorized JavaScript origins — add it in Google Cloud Console."],
-    [/popup_closed|popup_blocked/i, "The Google sign-in popup was blocked or closed — allow popups for this site and try again."]
+    [/popup_closed|popup_blocked/i, "The Google sign-in popup was blocked or closed — allow popups for this site and try again."],
+    [/permission_denied|insufficient.*scope/i, "Missing permission — the signed-in account may not have access, or the token is missing a scope this action needs."],
+    [/unexpected token.*json|json\.parse|not valid json/i, "The response wasn't valid JSON — usually means the server sent back an error page instead of real data."],
+    [/cors|cross-origin request blocked/i, "Blocked by CORS — the server this request went to doesn't allow requests from this page directly."],
+    [/mixed content|insecure content/i, "An HTTPS page tried to load something over plain HTTP — browsers block this silently."],
+    [/syntaxerror|unexpected token/i, "There's a syntax error in the code — check the line mentioned above for a missing bracket, quote, or comma."],
+    [/vercel/i, "A Vercel request or deployment had a problem — open the deployment link for the full build log; a missing dependency or bad build script is the most common cause."],
+    [/invalid hook call/i, "React hooks were called outside a component, or two copies of React are loaded — check for duplicate React versions."],
+    [/objects are not valid as a react child/i, "Something is trying to render a raw object/array directly — wrap it in a string, or pull out the specific field to display."],
+    [/maximum update depth exceeded/i, "A React component is stuck re-rendering itself — usually a setState call with no condition guarding it inside an effect or render."],
+    [/minified react error/i, "This is a production React error code — check the number against React's error decoder, or reproduce it in a dev build to see the full message."],
+    [/unique .*key.* prop/i, "A list of React elements is missing a stable key prop — this is a warning, not a crash, but can cause odd re-render behavior."]
   ];
+  var GENERIC_HINT = "No specific tip for this one — the exact wording above is the best clue; searching it together with the tool name usually surfaces the cause fastest.";
   function hintFor(text){
     for (var i=0;i<HINTS.length;i++){ if (HINTS[i][0].test(text)) return HINTS[i][1]; }
-    return null;
+    return GENERIC_HINT;
   }
   function addConsoleLine(entry){
     var line = document.createElement("div");
