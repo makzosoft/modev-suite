@@ -100,7 +100,7 @@
 
   function humanBytes(n){ return n < 1024 ? n + " B" : (n/1024).toFixed(1) + " KB"; }
   function refreshStorage(){
-    var groups = { "Device Lab": 0, "GitHub tool": 0, "Apps Script": 0, "Vercel": 0, "Code Editor drafts": 0, "Code Editor state": 0, "Other": 0 };
+    var groups = { "Device Lab": 0, "GitHub tool": 0, "Apps Script": 0, "Vercel": 0, "Code Editor drafts": 0, "Code Editor state": 0, "Shared": 0, "Other": 0 };
     var total = 0;
     try{
       for (var i = 0; i < localStorage.length; i++){
@@ -113,6 +113,7 @@
         else if (key.indexOf("vercelUploader.") === 0) groups["Vercel"] += size;
         else if (key.indexOf("codeEditor.draft::") === 0) groups["Code Editor drafts"] += size;
         else if (key.indexOf("codeEditor.") === 0) groups["Code Editor state"] += size;
+        else if (key.indexOf("modev.") === 0) groups["Shared"] += size;
         else groups["Other"] += size;
       }
     }catch(e){}
