@@ -114,7 +114,7 @@
   function populatePageSelect(files, selectedPath){
     els.pageSelect.innerHTML = "";
     if (!files.length){
-      var o=document.createElement("option"); o.value=""; o.textContent="— no HTML files found —";
+      var o=document.createElement("option"); o.value=""; o.textContent="— no previewable files found —";
       els.pageSelect.appendChild(o); return;
     }
     files.forEach(function(f){ var opt=document.createElement("option"); opt.value=f; opt.textContent=f; els.pageSelect.appendChild(opt); });
@@ -139,11 +139,11 @@
     populatePageSelect(discoveredFiles, target);
 
     if (!discoveredFiles.length){
-      setStatus("No HTML files found in that selection.", true);
+      setStatus("No previewable files found in that selection.", true);
     } else if (!looksRight){
-      setStatus(discoveredFiles.length + " HTML file(s) found — but this doesn't look like the folder Device Lab is in. Paths may not resolve.", true);
+      setStatus(discoveredFiles.length + " file(s) found — but this doesn't look like the folder Device Lab is in. Paths may not resolve.", true);
     } else {
-      setStatus(discoveredFiles.length + " HTML page(s) found" + (folderLabel ? " in \u201c"+folderLabel+"\u201d" : ""), false);
+      setStatus(discoveredFiles.length + " file(s) found" + (folderLabel ? " in \u201c"+folderLabel+"\u201d" : ""), false);
       els.status.classList.add("ok");
     }
     if (target){ els.pathInput.value = target; loadPath(target); }
@@ -219,8 +219,10 @@
   });
 
   // ---------------- discovery method 3: drag & drop (desktop) ----------------
-  function walkEntry(entry, relPath, results){
+  function walkEntry(entry, relPath, results, depth){
+    depth = depth || 0;
     return new Promise(function(resolve){
+      if (depth > 6){ resolve(); return; }
       if (entry.isFile){
         var fullPath = relPath ? relPath+"/"+entry.name : entry.name;
         entry.file(function(file){
@@ -239,7 +241,7 @@
           reader.readEntries(function(batch){
             if (!batch.length){
               Promise.all(all.map(function(e){
-                return walkEntry(e, relPath ? relPath+"/"+entry.name : entry.name, results);
+                return walkEntry(e, relPath ? relPath+"/"+entry.name : entry.name, results, depth+1);
               })).then(resolve);
               return;
             }
@@ -310,11 +312,11 @@
     });
   }
   function tryReconnectSilently(){
-    if (!supportsFSAccess) return;
-    idbGet("projectDir").then(function(handle){
-      if (!handle) return;
+    if (!supportsFSAccess) return Promise.resolve(false);
+    return idbGet("projectDir").then(function(handle){
+      if (!handle) return false;
       return handle.queryPermission({mode:"read"}).then(function(perm){
-        if (perm === "granted") return connectHandle(handle);
+        if (perm === "granted") return connectHandle(handle).then(function(){ return true; });
         els.folderBtn.innerHTML = "";
         var rIcon = document.createElement("span"); rIcon.setAttribute("data-icon","folder");
         els.folderBtn.appendChild(rIcon);
@@ -324,8 +326,9 @@
             if (p === "granted"){ els.folderBtn.onclick = connectFolder; connectHandle(handle); }
           });
         };
+        return false;
       });
-    }).catch(function(){});
+    }).catch(function(){ return false; });
   }
 
   // ---------------- device select / sizing ----------------
@@ -394,6 +397,17 @@
   var gh = { token:null, owner:null, repo:null, branch:null, path:"" };
 
   function ghHeaders(){ return { "Authorization": "token " + gh.token, "Accept": "application/vnd.github+json" }; }
+  // Parses a GitHub API response, but turns a non-2xx into a real, specific Error
+  // (using GitHub's own "message" when there is one) instead of handing the caller an
+  // error-shaped object to choke on — a 401 body ({message:"Bad credentials"}) is valid
+  // JSON but not the array a caller expects, so forEach() on it would otherwise throw a
+  // confusing "is not a function" TypeError rather than say what actually went wrong.
+  function ghJson(r){
+    if (r.ok) return r.json();
+    return r.json().catch(function(){ return {}; }).then(function(d){
+      throw new Error(d.message || ("GitHub error " + r.status));
+    });
+  }
   function ghEncodePath(p){ return p.split("/").filter(Boolean).map(encodeURIComponent).join("/"); }
   function ghResolveRelative(basePath, rel){
     if (/^https?:\/\//i.test(rel) || rel.indexOf("//") === 0) return null;
@@ -439,6 +453,23 @@
       return out;
     });
   }
+  var CONSOLE_BRIDGE = '<script>(function(){' +
+    'function post(level,args){try{parent.postMessage({__preview:true,level:level,text:Array.prototype.map.call(args,function(a){try{return typeof a==="string"?a:JSON.stringify(a);}catch(e){return String(a);}}).join(" ")},"*");}catch(e){}}' +
+    '["log","warn","error","info"].forEach(function(l){var o=console[l]?console[l].bind(console):function(){};console[l]=function(){post(l,arguments);o.apply(console,arguments);};});' +
+    'window.addEventListener("error",function(e){post("error",[e.message+" ("+e.lineno+":"+e.colno+")"]);});' +
+    'window.addEventListener("unhandledrejection",function(e){post("error",["Unhandled rejection: "+(e.reason&&e.reason.message||e.reason)]);});' +
+    '})();<' + '/script>';
+  window.addEventListener("message", function(e){
+    if (!e.data || !e.data.__preview) return;
+    if (e.data.level !== "error" && e.data.level !== "warn") return;
+    // Forward the previewed page's own errors/warnings up to the hub's unified
+    // Bug tab, tagged so it's clear they came from the page being previewed.
+    try{
+      parent.postMessage({__devConsole:true, tool:"device-lab", level:e.data.level,
+        time:Date.now(), text:"[Preview] " + e.data.text}, window.location.origin);
+    }catch(err){}
+  });
+
   function ghBuildInlinedHtml(rawHtml, filePath){
     var html2 = rawHtml;
     var fetches = [];
@@ -470,6 +501,8 @@
     });
     return Promise.all(fetches).then(function(parts){
       parts.forEach(function(part, i){ html2 = html2.replace("@@GHINLINE" + i + "@@", part); });
+      if (/<head[^>]*>/i.test(html2)) html2 = html2.replace(/<head([^>]*)>/i, "<head$1>" + CONSOLE_BRIDGE);
+      else html2 = CONSOLE_BRIDGE + html2;
       return html2;
     });
   }
@@ -496,7 +529,7 @@
   function ghLoadRepos(){
     els.ghStatus.textContent = "Loading repos…";
     fetch("https://api.github.com/user/repos?per_page=100&sort=updated", { headers: ghHeaders() })
-      .then(function(r){ return r.json(); })
+      .then(ghJson)
       .then(function(repos){
         els.ghRepoSelect.innerHTML = '<option value="">Repo…</option>';
         repos.forEach(function(r){ var o = document.createElement("option"); o.value = r.full_name; o.textContent = r.full_name; els.ghRepoSelect.appendChild(o); });
@@ -519,7 +552,7 @@
           if (repos.some(function(r){ return r.full_name === fullName; })) ghSelectRepo(fullName, targetBranch, targetPath);
         }
       })
-      .catch(function(){ els.ghStatus.textContent = "Couldn't load repos"; });
+      .catch(function(err){ console.error("Couldn't load repos: " + err.message); els.ghStatus.textContent = "Couldn't load repos: " + err.message; });
   }
   els.ghRepoSelect.addEventListener("change", function(){
     if (!els.ghRepoSelect.value) return;
@@ -531,7 +564,7 @@
     els.ghRepoSelect.value = fullName;
     els.ghStatus.textContent = "Loading branches…";
     fetch("https://api.github.com/repos/" + fullName + "/branches?per_page=100", { headers: ghHeaders() })
-      .then(function(r){ return r.json(); })
+      .then(ghJson)
       .then(function(branches){
         els.ghBranchSelect.innerHTML = "";
         branches.forEach(function(b){ var o = document.createElement("option"); o.value = b.name; o.textContent = b.name; els.ghBranchSelect.appendChild(o); });
@@ -541,7 +574,7 @@
         saveSharedRepo(gh.owner, gh.repo, gh.branch);
         ghLoadFolder(gh.path);
       })
-      .catch(function(){ els.ghStatus.textContent = "Couldn't load branches"; });
+      .catch(function(err){ console.error("Couldn't load branches: " + err.message); els.ghStatus.textContent = "Couldn't load branches: " + err.message; });
   }
   els.ghBranchSelect.addEventListener("change", function(){
     gh.branch = els.ghBranchSelect.value;
@@ -623,6 +656,7 @@
         els.pathInput.value = label; els.topbarPage.textContent = label;
         els.ghStatus.textContent = "Loaded " + path;
         updateLabel();
+        if (gridActive) renderGrid();
       }).catch(function(err){ els.ghStatus.textContent = "Failed: " + err.message; });
       return;
     }
@@ -636,6 +670,7 @@
         els.topbarPage.textContent = label;
         els.ghStatus.textContent = "Loaded " + path;
         updateLabel();
+        if (gridActive) renderGrid();
       })
       .catch(function(err){ els.ghStatus.textContent = "Failed: " + err.message; });
   }
@@ -652,18 +687,17 @@
       // project folder happened to be the exact same folder this tool sits in on disk; picking
       // any other folder silently produced a blank frame. Reading content directly works no
       // matter where the folder is.
-      loadLocalContent(path);
+      loadLocalContent(path); // refreshes the grid itself once the content actually loads
       if (discoveredFiles.indexOf(path) !== -1) els.pageSelect.value = path;
       els.pathInput.value = path;
       els.topbarPage.textContent = path;
       saveState({path:path});
       rememberKnownPath(path);
-      if (gridActive) renderGrid();
       return;
     }
     els.empty.style.display="none"; els.device.style.display=""; els.frameLabel.style.display="";
     setStatus("Loading "+path+" …");
-    els.iframe.onload=function(){ setStatus("Loaded "+path); els.status.classList.add("ok"); };
+    els.iframe.onload=function(){ setStatus("Loaded "+path); els.status.classList.add("ok"); if (gridActive) renderGrid(); };
     els.iframe.onerror=function(){ setStatus("Could not load "+path+". Check the path is correct.", true); };
     els.iframe.removeAttribute("srcdoc");
     els.iframe.src=path;
@@ -671,7 +705,6 @@
     els.topbarPage.textContent = path;
     saveState({path:path});
     rememberKnownPath(path);
-    if (gridActive) renderGrid();
   }
 
   // ---------------- Grid compare (2-4 sizes side by side) ----------------
@@ -709,7 +742,14 @@
       return;
     }
     els.gridEmpty.style.display = "none";
-    var path = els.pathInput.value.trim();
+    // Mirror whatever the main preview iframe is currently showing — its srcdoc
+    // (used for local-folder and GitHub sources, which aren't real fetchable URLs)
+    // if set, otherwise its real src (direct-URL mode). Re-deriving a URL from
+    // els.pathInput here instead would be wrong: for local/GitHub sources that
+    // field holds a display label or bare relative path, not something a grid
+    // tile's independent iframe could actually load on its own.
+    var srcdocContent = els.iframe.srcdoc || null;
+    var srcUrl = (!srcdocContent && els.iframe.src && els.iframe.src.indexOf("about:blank") === -1) ? els.iframe.src : null;
     gridDevices.forEach(function(d, i){
       var item = document.createElement("div");
       item.className = "grid-item";
@@ -727,7 +767,8 @@
       box.style.width = (d.w * scale) + "px";
       box.style.height = (d.h * scale) + "px";
       box.style.overflow = "hidden";
-      if (path) frame.src = path;
+      if (srcdocContent) frame.srcdoc = srcdocContent;
+      else if (srcUrl) frame.src = srcUrl;
       var rm = document.createElement("button");
       rm.className = "small"; rm.textContent = "Remove"; rm.style.marginTop = "8px";
       rm.addEventListener("click", function(){
@@ -839,6 +880,8 @@
       });
       return Promise.all(fetches).then(function(parts){
         parts.forEach(function(part, i){ html2 = html2.replace("@@LOCALINLINE" + i + "@@", part); });
+        if (/<head[^>]*>/i.test(html2)) html2 = html2.replace(/<head([^>]*)>/i, "<head$1>" + CONSOLE_BRIDGE);
+        else html2 = CONSOLE_BRIDGE + html2;
         return html2;
       });
     });
@@ -891,6 +934,7 @@
         els.iframe.removeAttribute("srcdoc");
         els.iframe.src = url;
         setStatus("Loaded " + path, "ok");
+        if (gridActive) renderGrid();
       }).catch(function(err){ setStatus("Couldn't load: " + err.message, true); });
       return;
     }
@@ -898,10 +942,18 @@
       els.iframe.removeAttribute("src");
       els.iframe.srcdoc = html2;
       setStatus("Loaded " + path, "ok");
+      if (gridActive) renderGrid();
     }).catch(function(err){ setStatus("Couldn't load: " + err.message, true); });
   }
   function getInlinedHtmlForCapture(){
     if (els.iframe.srcdoc) return Promise.resolve(els.iframe.srcdoc);
+    if (els.iframe.src && els.iframe.src.indexOf("about:blank") === -1){
+      // A directly-typed URL loads in its own cross-origin document — html2canvas
+      // has no way to reach into that from here, the same cross-origin restriction
+      // that applies everywhere else. Only local/GitHub-connected content (which
+      // renders via srcdoc, same-origin) can actually be captured this way.
+      return Promise.reject(new Error("Screenshot/recording only works for local or GitHub-connected projects — for a live URL, use your phone's own screenshot tool"));
+    }
     var currentPath = els.pathInput.value.trim();
     if (!currentPath) return Promise.reject(new Error("Load a page first"));
     return buildLocalInlinedHtml(currentPath);
@@ -936,7 +988,7 @@
       }).catch(function(err){ document.body.removeChild(temp); throw err; });
     }).catch(function(err){
       console.error("Screenshot failed: " + err.message);
-      setStatus("Couldn't capture automatically — try your phone's own screenshot instead.", true);
+      setStatus(err.message || "Couldn't capture automatically — try your phone's own screenshot instead.", true);
     });
   });
 
@@ -991,7 +1043,7 @@
     }).catch(function(err){
       recording = false; els.recordBtn.disabled = false;
       console.error("Recording failed: " + err.message);
-      setStatus("Couldn't record — try your phone's own screen recorder instead.", true);
+      setStatus(err.message || "Couldn't record — try your phone's own screen recorder instead.", true);
     });
   });
 
@@ -1025,7 +1077,13 @@
   els.pathInput.addEventListener("keydown", function(e){ if (e.key==="Enter"){ loadPath(els.pathInput.value.trim()); closeDrawer(); } });
   function doReload(){
     if (els.iframe.srcdoc){ var html2 = els.iframe.srcdoc; els.iframe.srcdoc = ""; els.iframe.srcdoc = html2; }
-    else if (els.iframe.src) els.iframe.src = els.iframe.src;
+    else if (els.iframe.src && els.iframe.src.indexOf("about:blank") === -1){
+      // Reassigning the identical src string is a no-op in many browsers — it has to
+      // actually change value to force a real reload, same idea as the srcdoc case above.
+      var url = els.iframe.src;
+      els.iframe.src = "about:blank";
+      setTimeout(function(){ els.iframe.src = url; }, 0);
+    }
   }
   els.reloadBtn.addEventListener("click", doReload);
   els.reloadBtnMobile.addEventListener("click", doReload);
@@ -1089,14 +1147,23 @@
   els.autoFit.checked = saved.autoFit!==undefined ? saved.autoFit : true;
   zoom = saved.zoom || 1;
 
-  tryReconnectSilently();
+  // Wait for a silent local-folder reconnect to settle before falling back to a plain
+  // loadPath() — reconnecting is async (IndexedDB + a permission check), and firing
+  // loadPath(saved.path) immediately would race ahead of it: isLocalPath() would still
+  // say false (the handle isn't restored yet), so a remembered LOCAL path would
+  // incorrectly be treated as a URL and briefly show a broken/404 preview before the
+  // reconnect finished and corrected it a moment later. connectHandle() already reloads
+  // the remembered path itself once a folder is restored, so the fallback below only
+  // needs to run when reconnecting didn't happen (or didn't apply to this path).
+  tryReconnectSilently().then(function(reconnected){
+    if (saved.path && !isLocalPath(saved.path)){
+      els.pathInput.value = saved.path;
+      loadPath(saved.path);
+    } else if (!saved.path && !reconnected){
+      els.device.style.display="none"; els.frameLabel.style.display="none"; els.empty.style.display="block";
+    }
+  });
 
-  if (saved.path){
-    els.pathInput.value = saved.path;
-    loadPath(saved.path);
-  } else {
-    els.device.style.display="none"; els.frameLabel.style.display="none"; els.empty.style.display="block";
-  }
   applySize();
   syncAddToGridCheckbox();
 })();
