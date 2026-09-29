@@ -72,6 +72,17 @@
   document.documentElement.style.setProperty("--editor-fs", fontSize + "px");
 
   function ghHeaders(){ return { "Authorization": "token " + gh.token, "Accept": "application/vnd.github+json" }; }
+  // Parses a GitHub API response, but turns a non-2xx into a real, specific Error
+  // (using GitHub's own "message" when there is one) instead of handing the caller an
+  // error-shaped object to choke on — a 401 body ({message:"Bad credentials"}) is valid
+  // JSON but not the array a caller expects, so forEach() on it would otherwise throw a
+  // confusing "is not a function" TypeError rather than say what actually went wrong.
+  function ghJson(r){
+    if (r.ok) return r.json();
+    return r.json().catch(function(){ return {}; }).then(function(d){
+      throw new Error(d.message || ("GitHub error " + r.status));
+    });
+  }
   function encodeApiPath(p){ return p.split("/").filter(Boolean).map(encodeURIComponent).join("/"); }
   function setStatus(msg, kind){ els.topStatus.textContent = msg||""; els.topStatus.className = kind||""; }
   function setConnectStatus(msg, kind){ els.connectStatus.textContent = msg||""; els.connectStatus.className = kind||""; }
@@ -119,7 +130,7 @@
   function loadRepos(){
     setStatus("Loading repos…");
     return fetch(API + "/user/repos?per_page=100&sort=updated", { headers: ghHeaders() })
-      .then(function(r){ return r.json(); })
+      .then(ghJson)
       .then(function(repos){
         allRepos = repos;
         renderRepoOptions(repos);
@@ -148,7 +159,7 @@
         }
         return repos;
       })
-      .catch(function(err){ setStatus("Repo load failed", "err"); return []; });
+      .catch(function(err){ console.error("Repo load failed: " + err.message); setStatus("Repo load failed: " + err.message, "err"); return []; });
   }
   function renderRepoOptions(repos){
     els.repoSelect.innerHTML = '<option value="">Repo…</option>';
@@ -164,7 +175,7 @@
     gh.owner = parts[0]; gh.repo = parts[1]; gh.path = preferPath || "";
     setStatus("Loading branches…");
     fetch(API + "/repos/" + fullName + "/branches?per_page=100", { headers: ghHeaders() })
-      .then(function(r){ return r.json(); })
+      .then(ghJson)
       .then(function(branches){
         els.branchSelect.innerHTML = "";
         branches.forEach(function(b){ var o=document.createElement("option"); o.value=b.name; o.textContent=b.name; els.branchSelect.appendChild(o); });
@@ -173,7 +184,7 @@
         saveEditorState();
         loadFolder(gh.path);
       })
-      .catch(function(){ setStatus("Branch load failed", "err"); });
+      .catch(function(err){ console.error("Branch load failed: " + err.message); setStatus("Branch load failed: " + err.message, "err"); });
   }
   els.branchSelect.addEventListener("change", function(){ gh.branch = els.branchSelect.value; gh.path=""; saveEditorState(); loadFolder(""); });
 
@@ -1047,7 +1058,16 @@
     }
   }
   window.addEventListener("message", function(e){
-    if (e.data && e.data.__preview) logToConsole(e.data.level, e.data.text);
+    if (!e.data || !e.data.__preview) return;
+    logToConsole(e.data.level, e.data.text);
+    // Also forward to the hub's unified Bug tab, tagged so it's clear this
+    // came from the previewed page's own console — not from Code Editor itself.
+    if (e.data.level === "error" || e.data.level === "warn"){
+      try{
+        parent.postMessage({__devConsole:true, tool:"code-editor", level:e.data.level,
+          time:Date.now(), text:"[Preview] " + e.data.text}, window.location.origin);
+      }catch(err){}
+    }
   });
   els.consoleClearBtn.addEventListener("click", function(){ els.consoleLog.innerHTML = ""; });
   els.replRun.addEventListener("click", runRepl);
