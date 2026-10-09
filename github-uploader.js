@@ -1039,43 +1039,6 @@
     });
   }
 
-  function getExistingSha(destPath){
-    var url = API + "/repos/" + state.owner + "/" + state.repo + "/contents/" + encodeApiPath(destPath) + "?ref=" + encodeURIComponent(state.branch);
-    return fetch(url, { headers: ghHeaders() }).then(function(r){
-      if (r.status === 200) return r.json().then(function(d){ return d.sha; });
-      return null;
-    }).catch(function(){ return null; });
-  }
-
-  function putFileToRepo(destPath, base64Content, message){
-    return getExistingSha(destPath).then(function(sha){
-      var body = { message: message, content: base64Content, branch: state.branch };
-      if (sha) body.sha = sha;
-      return fetch(API + "/repos/" + state.owner + "/" + state.repo + "/contents/" + encodeApiPath(destPath), {
-        method: "PUT",
-        headers: Object.assign({ "Content-Type": "application/json" }, ghHeaders()),
-        body: JSON.stringify(body)
-      }).then(function(res){
-        if (!res.ok) return res.json().then(function(d){ throw new Error(d.message || ("GitHub error " + res.status)); });
-        return res.json();
-      });
-    });
-  }
-
-  function deleteFileFromRepo(path, message){
-    return getExistingSha(path).then(function(sha){
-      if (!sha) throw new Error("File no longer exists on GitHub");
-      return fetch(API + "/repos/" + state.owner + "/" + state.repo + "/contents/" + encodeApiPath(path), {
-        method: "DELETE",
-        headers: Object.assign({ "Content-Type": "application/json" }, ghHeaders()),
-        body: JSON.stringify({ message: message, sha: sha, branch: state.branch })
-      }).then(function(res){
-        if (!res.ok) return res.json().then(function(d){ throw new Error(d.message || ("GitHub error " + res.status)); });
-        return res.json();
-      });
-    });
-  }
-
   function bytesToBase64(bytes){
     var binary = "", chunk = 0x8000;
     for (var i = 0; i < bytes.length; i += chunk){
@@ -1084,40 +1047,108 @@
     return btoa(binary);
   }
 
-  function runUpload(item){
-    var destPath = (item.destFolder ? item.destFolder + "/" : "") + item.label;
-    return fileToBase64(item.file).then(function(content){
-      return putFileToRepo(destPath, content, "Add " + item.label + " via Modev Suite");
-    });
-  }
+  // ---------------------------------------------------------------------
+  // Push: every staged change — uploads, files extracted from a staged zip,
+  // and deletes — is combined into ONE commit instead of one commit per
+  // file. This isn't just tidiness: if this repo has Vercel's GitHub
+  // integration connected, Vercel auto-deploys on every push, so pushing
+  // a multi-file zip as N separate commits can burn through a whole day's
+  // deployment quota (Hobby plan: 100/day) from a single upload. One
+  // commit means one push means (at most) one deploy.
+  // It also makes a push atomic: with the old one-commit-per-file flow, a
+  // failure partway through left the repo in a half-applied state. Here,
+  // either the whole tree/commit/ref chain succeeds together, or nothing
+  // is written at all — nothing is staged as "pushed" unless it really was.
+  // ---------------------------------------------------------------------
 
-  function runZipUpload(item){
-    return item.file.arrayBuffer()
-      .then(function(buf){ return import("https://esm.sh/fflate@0.8.2").then(function(fflate){ return fflate.unzipSync(new Uint8Array(buf)); }); })
-      .then(function(unzipped){
-        var names = Object.keys(unzipped).filter(function(n){
-          return !n.endsWith("/") && !/(^|\/)__MACOSX(\/|$)/.test(n) && !/(^|\/)\.DS_Store$/.test(n);
-        });
-        if (!names.length) throw new Error("Zip had no files to extract");
-        var failed = [];
-        function next(i){
-          if (i >= names.length){
-            if (failed.length) throw new Error(failed.length + "/" + names.length + " files in " + item.label + " failed");
-            return Promise.resolve();
-          }
-          var name = names[i];
-          var destPath = (item.destFolder ? item.destFolder + "/" : "") + name;
-          setTopStatus("Pushing " + item.label + ": " + (i+1) + "/" + names.length + "…");
-          return putFileToRepo(destPath, bytesToBase64(unzipped[name]), "Add " + name + " (extracted from " + item.label + ") via Modev Suite")
-            .catch(function(err){ failed.push(name); console.error("Failed to upload " + name + " from " + item.label + ": " + err.message); })
-            .then(function(){ return next(i+1); });
-        }
-        return next(0);
+  function expandQueueToFileOps(queue){
+    var ops = [];
+    function handleItem(item){
+      if (item.type === "delete"){
+        ops.push({ item: item, path: item.path, isDelete: true });
+        return Promise.resolve();
+      }
+      if (item.type === "upload-zip"){
+        return item.file.arrayBuffer()
+          .then(function(buf){ return import("https://esm.sh/fflate@0.8.2").then(function(fflate){ return fflate.unzipSync(new Uint8Array(buf)); }); })
+          .then(function(unzipped){
+            var names = Object.keys(unzipped).filter(function(n){
+              return !n.endsWith("/") && !/(^|\/)__MACOSX(\/|$)/.test(n) && !/(^|\/)\.DS_Store$/.test(n);
+            });
+            if (!names.length) throw new Error("Zip had no files to extract: " + item.label);
+            names.forEach(function(name){
+              var destPath = (item.destFolder ? item.destFolder + "/" : "") + name;
+              ops.push({ item: item, path: destPath, content: bytesToBase64(unzipped[name]), isDelete: false });
+            });
+          });
+      }
+      // plain file upload
+      var destPath = (item.destFolder ? item.destFolder + "/" : "") + item.label;
+      return fileToBase64(item.file).then(function(content){
+        ops.push({ item: item, path: destPath, content: content, isDelete: false });
       });
+    }
+    return queue.reduce(function(chain, item){ return chain.then(function(){ return handleItem(item); }); }, Promise.resolve())
+      .then(function(){ return ops; });
   }
 
-  function runDelete(item){
-    return deleteFileFromRepo(item.path, "Delete " + item.name + " via Modev Suite");
+  function buildCommitMessage(queue, ops){
+    if (queue.length === 1 && queue[0].type !== "upload-zip"){
+      var item = queue[0];
+      return item.type === "delete" ? ("Delete " + item.name + " via Modev Suite") : ("Add " + item.label + " via Modev Suite");
+    }
+    var addCount = ops.filter(function(o){ return !o.isDelete; }).length;
+    var delCount = ops.filter(function(o){ return o.isDelete; }).length;
+    var summary = [];
+    if (addCount) summary.push(addCount + " added/updated");
+    if (delCount) summary.push(delCount + " deleted");
+    var title = "Update " + ops.length + " file" + (ops.length===1?"":"s") + " via Modev Suite (" + summary.join(", ") + ")";
+    var listed = ops.slice(0, 50).map(function(o){ return (o.isDelete ? "- Delete " : "- ") + o.path; }).join("\n");
+    if (ops.length > 50) listed += "\n…and " + (ops.length - 50) + " more";
+    return title + "\n\n" + listed;
+  }
+
+  function pushBatch(queue){
+    var ghApiHeaders = Object.assign({ "Content-Type": "application/json" }, ghHeaders());
+    var repoBase = API + "/repos/" + state.owner + "/" + state.repo;
+    var parentCommitSha, ops;
+    setTopStatus("Preparing " + queue.length + " change" + (queue.length===1?"":"s") + "…");
+    return expandQueueToFileOps(queue).then(function(resolvedOps){
+      ops = resolvedOps;
+      if (!ops.length) throw new Error("Nothing to push");
+      setTopStatus("Reading current branch…");
+      return fetch(repoBase + "/git/ref/heads/" + encodeURIComponent(state.branch), { headers: ghHeaders() }).then(ghJson);
+    }).then(function(refData){
+      parentCommitSha = refData.object.sha;
+      return fetch(repoBase + "/git/commits/" + parentCommitSha, { headers: ghHeaders() }).then(ghJson);
+    }).then(function(parentCommit){
+      var uploads = ops.filter(function(o){ return !o.isDelete; });
+      setTopStatus(uploads.length ? ("Uploading " + uploads.length + " file" + (uploads.length===1?"":"s") + "…") : "Building commit…");
+      return Promise.all(uploads.map(function(op){
+        return fetch(repoBase + "/git/blobs", { method:"POST", headers: ghApiHeaders, body: JSON.stringify({ content: op.content, encoding: "base64" }) })
+          .then(ghJson).then(function(blob){ op.blobSha = blob.sha; });
+      })).then(function(){ return parentCommit.tree.sha; });
+    }).then(function(baseTreeSha){
+      setTopStatus("Building commit…");
+      var treeEntries = ops.map(function(op){
+        return op.isDelete
+          ? { path: op.path, mode: "100644", type: "blob", sha: null }
+          : { path: op.path, mode: "100644", type: "blob", sha: op.blobSha };
+      });
+      return fetch(repoBase + "/git/trees", { method:"POST", headers: ghApiHeaders, body: JSON.stringify({ base_tree: baseTreeSha, tree: treeEntries }) }).then(ghJson);
+    }).then(function(newTree){
+      return fetch(repoBase + "/git/commits", {
+        method:"POST", headers: ghApiHeaders,
+        body: JSON.stringify({ message: buildCommitMessage(queue, ops), tree: newTree.sha, parents: [parentCommitSha] })
+      }).then(ghJson);
+    }).then(function(newCommit){
+      setTopStatus("Updating " + state.branch + "…");
+      return fetch(repoBase + "/git/refs/heads/" + encodeURIComponent(state.branch), {
+        method:"PATCH", headers: ghApiHeaders, body: JSON.stringify({ sha: newCommit.sha })
+      }).then(ghJson);
+    }).then(function(){
+      return ops;
+    });
   }
 
   els.pushBtn.addEventListener("click", function(){
@@ -1125,27 +1156,20 @@
     if (!state.owner || !state.repo || !state.branch){ setTopStatus("Pick a repo and branch first.", "err"); return; }
     var queue = pending.slice();
     els.pushBtn.disabled = true;
-    var okCount = 0, failCount = 0;
-    function next(i){
-      if (i >= queue.length){
-        els.pushBtn.disabled = pending.length === 0;
-        showToast(failCount ? (okCount + " pushed, " + failCount + " failed") : ("Pushed " + okCount + " change" + (okCount===1?"":"s")), failCount ? "err" : "ok");
-        loadFolder(state.path);
-        loadCommits();
-        return;
-      }
-      var item = queue[i];
-      setTopStatus("Pushing " + (i+1) + "/" + queue.length + "…");
-      var runner = item.type === "delete" ? runDelete(item) : (item.type === "upload-zip" ? runZipUpload(item) : runUpload(item));
-      runner
-        .then(function(){ okCount++; unstageById(item.id, false); next(i+1); })
-        .catch(function(err){
-          failCount++;
-          console.error("Push failed for " + (item.label || item.path) + ": " + err.message);
-          next(i+1);
-        });
-    }
-    next(0);
+    pushBatch(queue).then(function(ops){
+      queue.forEach(function(item){ unstageById(item.id, false); });
+      els.pushBtn.disabled = pending.length === 0;
+      showToast("Pushed " + ops.length + " change" + (ops.length===1?"":"s") + " in one commit", "ok");
+      loadFolder(state.path);
+      loadCommits();
+    }).catch(function(err){
+      els.pushBtn.disabled = pending.length === 0;
+      console.error("Push failed: " + err.message);
+      setTopStatus("Push failed: " + err.message, "err");
+      showToast("Push failed — nothing was changed", "err");
+      // Atomic by design: nothing in `queue` gets unstaged on failure, since the whole
+      // batch either lands together or not at all — nothing was partially applied.
+    });
   });
 
   // ------------------------------------------------------------------
